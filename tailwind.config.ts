@@ -57,6 +57,12 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        // ArchaeoLink Custom Colors
+        "earth-warm": "hsl(var(--earth-warm))",
+        "earth-deep": "hsl(var(--earth-deep))",
+        "stone-light": "hsl(var(--stone-light))",
+        "professional-blue": "hsl(var(--professional-blue))",
+        "discovery-gold": "hsl(var(--discovery-gold))",
       },
       borderRadius: {
         lg: "var(--radius)",
