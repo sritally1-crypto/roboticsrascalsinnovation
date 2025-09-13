@@ -210,6 +210,7 @@ export const Scanner3D = ({ onScanComplete }: Scanner3DProps) => {
       qualities: imageQualities,
       timestamp: new Date().toISOString(),
       imageCount: capturedImages.length,
+      quality: qualityGrade,
       qualityGrade,
       averageQuality: avgQuality,
       reconstructionQuality: Math.min(avgQuality * 1.2, 1), // AI enhancement bonus
@@ -217,7 +218,9 @@ export const Scanner3D = ({ onScanComplete }: Scanner3DProps) => {
         cameraSpecs: 'High-resolution multi-angle capture',
         aiEnhanced: true,
         backgroundRemoved: processedImages.length > 0,
-        processingTime: steps.length * 800
+        processingTime: steps.length * 800,
+        reconstructionMethod: 'multi-view-stereo',
+        featurePoints: Math.floor(capturedImages.length * 200 * avgQuality)
       }
     };
     

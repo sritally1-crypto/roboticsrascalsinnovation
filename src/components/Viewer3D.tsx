@@ -1,10 +1,11 @@
-import { Suspense, useRef, useState } from 'react';
+import { Suspense, useRef, useState, useEffect } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, Environment, ContactShadows, Text } from '@react-three/drei';
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { RotateCcw, Maximize, Download } from "lucide-react";
 import * as THREE from 'three';
+import { reconstruct3DFromImages, type ReconstructionData } from '@/lib/3dReconstruction';
 
 interface Viewer3DProps {
   scanData?: any;
@@ -14,11 +15,51 @@ interface Viewer3DProps {
 function ArtifactMesh({ scanData }: { scanData?: any }) {
   const meshRef = useRef<THREE.Mesh>(null);
   const [hovered, setHovered] = useState(false);
+  const [reconstructionData, setReconstructionData] = useState<ReconstructionData | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Reconstruct 3D model from scan data
+  useEffect(() => {
+    if (!scanData?.images || scanData.images.length === 0) {
+      return;
+    }
+
+    setIsLoading(true);
+    reconstruct3DFromImages(
+      scanData.images, 
+      scanData.processedImages || [], 
+      scanData.qualities || []
+    ).then((data) => {
+      setReconstructionData(data);
+      setIsLoading(false);
+    }).catch((error) => {
+      console.error('3D reconstruction failed:', error);
+      setIsLoading(false);
+    });
+  }, [scanData]);
 
   useFrame((state) => {
-    if (meshRef.current) {
+    if (meshRef.current && !isLoading) {
       meshRef.current.rotation.y = hovered ? state.clock.elapsedTime * 0.5 : state.clock.elapsedTime * 0.1;
     }
+  });
+
+  if (isLoading) {
+    return (
+      <mesh>
+        <boxGeometry args={[0.5, 0.5, 0.5]} />
+        <meshStandardMaterial color="#666" opacity={0.5} transparent />
+      </mesh>
+    );
+  }
+
+  // Use reconstructed data if available, otherwise show placeholder
+  const geometry = reconstructionData?.geometry || new THREE.BoxGeometry(2, 1, 0.5);
+  const material = reconstructionData?.material || new THREE.MeshStandardMaterial({
+    color: "#8B4513",
+    roughness: 0.8,
+    metalness: 0.1,
+    normalScale: new THREE.Vector2(0.5, 0.5)
   });
 
   return (
@@ -27,15 +68,9 @@ function ArtifactMesh({ scanData }: { scanData?: any }) {
       onPointerOver={() => setHovered(true)}
       onPointerOut={() => setHovered(false)}
       scale={hovered ? 1.1 : 1}
-    >
-      <boxGeometry args={[2, 1, 0.5]} />
-      <meshStandardMaterial 
-        color="#8B4513" 
-        roughness={0.8}
-        metalness={0.1}
-        normalScale={new THREE.Vector2(0.5, 0.5)}
-      />
-    </mesh>
+      geometry={geometry}
+      material={material}
+    />
   );
 }
 
