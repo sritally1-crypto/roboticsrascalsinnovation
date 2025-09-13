@@ -49,10 +49,7 @@ export const Scanner3D = ({ onScanComplete }: Scanner3DProps) => {
   }, []);
 
   const startCamera = useCallback(async () => {
-    try {
-      const constraints = getOptimalCameraConstraints();
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
-      
+    const applyStream = (stream: MediaStream) => {
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         streamRef.current = stream;
@@ -60,9 +57,44 @@ export const Scanner3D = ({ onScanComplete }: Scanner3DProps) => {
         startQualityMonitoring();
         toast.success("Camera ready! Position your artifact in good lighting");
       }
-    } catch (error) {
-      toast.error("Camera access denied. Please enable camera permissions and try again.");
-      console.error('Camera error:', error);
+    };
+
+    try {
+      // Primary high-quality constraints
+      const constraints = getOptimalCameraConstraints();
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      applyStream(stream);
+    } catch (error: any) {
+      console.warn('Primary camera constraints failed:', error?.name || error);
+      // Fallback 1: Prefer environment camera with relaxed constraints
+      try {
+        const fallback1: MediaStreamConstraints = { video: { facingMode: 'environment' }, audio: false };
+        const stream = await navigator.mediaDevices.getUserMedia(fallback1);
+        toast("Using fallback camera settings for compatibility");
+        applyStream(stream);
+        return;
+      } catch (e1) {
+        console.warn('Fallback 1 failed:', (e1 as any)?.name || e1);
+      }
+
+      // Fallback 2: Any available camera
+      try {
+        const fallback2: MediaStreamConstraints = { video: true, audio: false };
+        const stream = await navigator.mediaDevices.getUserMedia(fallback2);
+        toast("Using basic camera settings. For higher quality, switch to rear camera.");
+        applyStream(stream);
+        return;
+      } catch (e2) {
+        const name = (error as any)?.name || (e2 as any)?.name;
+        if (name === 'NotAllowedError' || name === 'SecurityError') {
+          toast.error('Camera permission denied. Please allow access and retry.');
+        } else if (name === 'OverconstrainedError') {
+          toast.error('No camera matches the requested settings. Try a different device or upload photos.');
+        } else {
+          toast.error('Unable to access camera on this device. Try uploading photos instead.');
+        }
+        console.error('Camera error:', e2);
+      }
     }
   }, [startQualityMonitoring]);
 
