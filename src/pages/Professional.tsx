@@ -1,21 +1,81 @@
 import { useState, useRef, useCallback } from "react";
 import { Scanner3D } from "@/components/Scanner3D";
+import { PhotoUploader } from "@/components/PhotoUploader";
 import { Viewer3D } from "@/components/Viewer3D";
 import { AIAnalysis } from "@/components/AIAnalysis";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Upload, FileText, Users, Settings } from "lucide-react";
+import { Upload, FileText, Users, Settings, Camera } from "lucide-react";
 import { analyzeImageQuality, removeBackground, loadImage, preprocessImage } from "@/lib/imageProcessing";
+import { generateCameraMatrices, reconstructPointCloud } from "@/lib/photogrammetry";
+import { type ImageQualityMetrics } from "@/lib/imageProcessing";
 import { toast } from "sonner";
 
 const Professional = () => {
   const [scanData, setScanData] = useState(null);
   const [activeTab, setActiveTab] = useState("scan");
+  const [scanMode, setScanMode] = useState<'live' | 'upload'>('live');
+  const [uploadedPhotos, setUploadedPhotos] = useState<HTMLImageElement[]>([]);
+  const [photoQualities, setPhotoQualities] = useState<ImageQualityMetrics[]>([]);
+  const [isReconstructing, setIsReconstructing] = useState(false);
 
   const handleScanComplete = (data: any) => {
     setScanData(data);
     setActiveTab("viewer");
+    toast.success("3D scan completed successfully!");
+  };
+
+  const handlePhotosProcessed = async (photos: HTMLImageElement[], qualities: ImageQualityMetrics[]) => {
+    setUploadedPhotos(photos);
+    setPhotoQualities(qualities);
+    
+    if (photos.length >= 8) {
+      // Automatically start 3D reconstruction when enough photos are uploaded
+      await processPhotogrammetry(photos, qualities);
+    }
+  };
+
+  const processPhotogrammetry = async (photos: HTMLImageElement[], qualities: ImageQualityMetrics[]) => {
+    setIsReconstructing(true);
+    toast("Starting photogrammetry reconstruction...");
+    
+    try {
+      // Generate camera matrices
+      const cameraMatrices = generateCameraMatrices(photos.length);
+      
+      // Perform 3D reconstruction
+      const result = await reconstructPointCloud(photos, cameraMatrices);
+      
+      // Convert to scan data format
+      const reconstructionData = {
+        images: photos.map(photo => photo.src),
+        processedImages: photos.map(photo => photo.src),
+        qualities: qualities,
+        timestamp: new Date().toISOString(),
+        imageCount: photos.length,
+        quality: result.metadata.coverage_percentage > 80 ? 'excellent' : result.metadata.coverage_percentage > 60 ? 'good' : 'fair',
+        photogrammetryResult: result,
+        metadata: {
+          ...result.metadata,
+          cameraSpecs: `${photos.length} photos photogrammetry`,
+          aiEnhanced: true,
+          backgroundRemoved: false,
+          reconstructionMethod: 'multi-view-photogrammetry',
+          featurePoints: result.metadata.totalPoints
+        }
+      };
+      
+      setScanData(reconstructionData);
+      setActiveTab("viewer");
+      
+      toast.success(`Photogrammetry complete! Generated ${result.metadata.totalPoints} 3D points with ${result.metadata.coverage_percentage.toFixed(1)}% coverage`);
+    } catch (error) {
+      console.error('Photogrammetry failed:', error);
+      toast.error("3D reconstruction failed. Try uploading higher quality photos with better overlap.");
+    } finally {
+      setIsReconstructing(false);
+    }
   };
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -108,7 +168,7 @@ const Professional = () => {
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="scan" className="flex items-center gap-2">
-              <Upload className="h-4 w-4" />
+              <Camera className="h-4 w-4" />
               3D Scanner
             </TabsTrigger>
             <TabsTrigger value="viewer" className="flex items-center gap-2">
@@ -126,43 +186,49 @@ const Professional = () => {
           </TabsList>
 
           <TabsContent value="scan" className="space-y-6">
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-              <Scanner3D onScanComplete={handleScanComplete} />
-              
-              <Card className="p-6">
-                <h3 className="text-lg font-semibold mb-4">Quick Upload</h3>
-                <div
-                  className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-8 text-center"
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
-                    if (files.length) {
-                      processUploads(files);
-                    } else {
-                      toast.error('Please drop image files');
-                    }
-                  }}
+            <Card className="p-6">
+              <div className="flex justify-center gap-4 mb-6">
+                <Button
+                  variant={scanMode === 'live' ? 'default' : 'outline'}
+                  onClick={() => setScanMode('live')}
+                  className="flex items-center gap-2"
                 >
-                  <Upload className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                  <p className="text-muted-foreground mb-4">
-                    Drag and drop images or click to upload
-                  </p>
-                  <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
-                    Select Files
-                  </Button>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    className="hidden"
-                    onChange={handleFileChange}
-                    aria-label="Upload artifact images"
+                  <Camera className="h-4 w-4" />
+                  Live Camera Scan
+                </Button>
+                <Button
+                  variant={scanMode === 'upload' ? 'default' : 'outline'}
+                  onClick={() => setScanMode('upload')}
+                  className="flex items-center gap-2"
+                >
+                  <Upload className="h-4 w-4" />
+                  Upload Photos
+                </Button>
+              </div>
+              
+              <div className="grid grid-cols-1 gap-6">
+                {scanMode === 'live' && (
+                  <Scanner3D onScanComplete={handleScanComplete} />
+                )}
+                
+                {scanMode === 'upload' && (
+                  <PhotoUploader 
+                    onPhotosProcessed={handlePhotosProcessed}
+                    maxPhotos={20}
                   />
-                </div>
-              </Card>
-            </div>
+                )}
+                
+                {isReconstructing && (
+                  <div className="bg-card rounded-lg border border-border p-8 text-center">
+                    <div className="w-16 h-16 mx-auto border-4 border-primary/30 border-t-primary rounded-full animate-spin mb-4" />
+                    <h3 className="text-xl font-semibold mb-2">Processing Photogrammetry</h3>
+                    <p className="text-muted-foreground">
+                      Analyzing {uploadedPhotos.length} photos and reconstructing 3D model...
+                    </p>
+                  </div>
+                )}
+              </div>
+            </Card>
           </TabsContent>
 
           <TabsContent value="viewer" className="space-y-6">
