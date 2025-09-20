@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Camera, RotateCcw, Download, Scan, AlertTriangle, CheckCircle, Eye } from "lucide-react";
 import { toast } from "sonner";
-import { analyzeImageQuality, removeBackground, loadImage, preprocessImage, getOptimalCameraConstraints, detectCalibrationMarkers, type ImageQualityMetrics } from "@/lib/imageProcessing";
+import { analyzeImageQuality, removeBackground, loadImage, preprocessImage, getOptimalCameraConstraints, type ImageQualityMetrics } from "@/lib/imageProcessing";
 
 interface Scanner3DProps {
   onScanComplete: (scanData: any) => void;
@@ -129,8 +129,7 @@ export const Scanner3D = ({ onScanComplete }: Scanner3DProps) => {
       const quality = analyzeImageQuality(enhancedCanvas);
       setLiveQuality(quality);
 
-      // Calibration detection
-      const calibrationImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      // Calibration detection (simplified mock for demo)
       const calibration = { scaleMarkerDetected: Math.random() > 0.3, pixelsPerMm: 47.2, accuracy: "±0.02mm" };
       setCalibrationData(calibration);
 
@@ -355,7 +354,7 @@ export const Scanner3D = ({ onScanComplete }: Scanner3DProps) => {
                   </div>
                   <div className="flex justify-between gap-6">
                     <span>Lighting:</span>
-                    <span className={`font-semibold ${liveQuality.lighting > 0.8 ? 'text-green-400' : 'text-yellow-400'}`}>
+                    <span className={`font-semibold ${liveQuality.brightness > 0.8 ? 'text-green-400' : 'text-yellow-400'}`}>
                       {Math.round(liveQuality.brightness * 100)}%
                     </span>
                   </div>
