@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { RotateCcw, Maximize, Download, Ruler } from "lucide-react";
 import { MeasurementOverlay } from './MeasurementOverlay';
+import { toast } from "sonner";
 import * as THREE from 'three';
 import { reconstruct3DFromImages, type ReconstructionData } from '@/lib/3dReconstruction';
 
@@ -122,8 +123,67 @@ export const Viewer3D = ({ scanData, artifactName = "Ancient Artifact" }: Viewer
   };
 
   const handleExport = () => {
-    // Export 3D model functionality
-    console.log('Export 3D model');
+    if (!scanData?.photogrammetryResult) {
+      toast.error("No 3D model available to export");
+      return;
+    }
+
+    try {
+      const mesh = scanData.photogrammetryResult.mesh;
+      const geometry = mesh.geometry as THREE.BufferGeometry;
+      
+      // Export as OBJ format (universally compatible)
+      const positions = geometry.attributes.position.array;
+      const normals = geometry.attributes.normal?.array;
+      const colors = geometry.attributes.color?.array;
+      const indices = geometry.index?.array;
+      
+      let obj = '# Exported from ArchaeoLink\n';
+      obj += `# Vertices: ${positions.length / 3}\n`;
+      obj += `# Faces: ${indices ? indices.length / 3 : 0}\n\n`;
+      
+      // Write vertices
+      for (let i = 0; i < positions.length; i += 3) {
+        obj += `v ${positions[i].toFixed(6)} ${positions[i+1].toFixed(6)} ${positions[i+2].toFixed(6)}`;
+        if (colors) {
+          obj += ` ${colors[i].toFixed(6)} ${colors[i+1].toFixed(6)} ${colors[i+2].toFixed(6)}`;
+        }
+        obj += '\n';
+      }
+      
+      // Write normals
+      if (normals) {
+        obj += '\n';
+        for (let i = 0; i < normals.length; i += 3) {
+          obj += `vn ${normals[i].toFixed(6)} ${normals[i+1].toFixed(6)} ${normals[i+2].toFixed(6)}\n`;
+        }
+      }
+      
+      // Write faces
+      if (indices) {
+        obj += '\n';
+        for (let i = 0; i < indices.length; i += 3) {
+          if (normals) {
+            obj += `f ${indices[i]+1}//${indices[i]+1} ${indices[i+1]+1}//${indices[i+1]+1} ${indices[i+2]+1}//${indices[i+2]+1}\n`;
+          } else {
+            obj += `f ${indices[i]+1} ${indices[i+1]+1} ${indices[i+2]+1}\n`;
+          }
+        }
+      }
+      
+      const blob = new Blob([obj], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `archaeolink_artifact_${Date.now()}.obj`;
+      a.click();
+      URL.revokeObjectURL(url);
+      
+      toast.success("3D model exported as OBJ! Compatible with Meshroom, Blender, and other 3D software.");
+    } catch (error) {
+      console.error('Export error:', error);
+      toast.error("Failed to export model");
+    }
   };
 
   return (

@@ -3,6 +3,7 @@ import { Scanner3D } from "@/components/Scanner3D";
 import { PhotoUploader } from "@/components/PhotoUploader";
 import { Viewer3D } from "@/components/Viewer3D";
 import { AIAnalysis } from "@/components/AIAnalysis";
+import { ProcessingPipeline } from "@/components/ProcessingPipeline";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -19,6 +20,8 @@ const Professional = () => {
   const [uploadedPhotos, setUploadedPhotos] = useState<HTMLImageElement[]>([]);
   const [photoQualities, setPhotoQualities] = useState<ImageQualityMetrics[]>([]);
   const [isReconstructing, setIsReconstructing] = useState(false);
+  const [pipelineStage, setPipelineStage] = useState<'upload' | 'processing' | 'reconstructing' | 'complete'>('upload');
+  const [reconstructionProgress, setReconstructionProgress] = useState(0);
 
   const handleScanComplete = (data: any) => {
     setScanData(data);
@@ -29,6 +32,10 @@ const Professional = () => {
   const handlePhotosProcessed = async (photos: HTMLImageElement[], qualities: ImageQualityMetrics[]) => {
     setUploadedPhotos(photos);
     setPhotoQualities(qualities);
+    setPipelineStage('processing');
+    
+    // Simulate quality analysis phase
+    await new Promise(resolve => setTimeout(resolve, 1500));
     
     if (photos.length >= 8) {
       // Automatically start 3D reconstruction when enough photos are uploaded
@@ -38,14 +45,19 @@ const Professional = () => {
 
   const processPhotogrammetry = async (photos: HTMLImageElement[], qualities: ImageQualityMetrics[]) => {
     setIsReconstructing(true);
+    setPipelineStage('reconstructing');
+    setReconstructionProgress(0);
     toast("Starting photogrammetry reconstruction...");
     
     try {
       // Generate camera matrices
+      setReconstructionProgress(20);
       const cameraMatrices = generateCameraMatrices(photos.length);
       
-      // Perform 3D reconstruction
+      // Perform 3D reconstruction with progress updates
+      setReconstructionProgress(40);
       const result = await reconstructPointCloud(photos, cameraMatrices);
+      setReconstructionProgress(80);
       
       // Convert to scan data format
       const reconstructionData = {
@@ -66,13 +78,16 @@ const Professional = () => {
         }
       };
       
+      setReconstructionProgress(100);
       setScanData(reconstructionData);
+      setPipelineStage('complete');
       setActiveTab("viewer");
       
       toast.success(`Photogrammetry complete! Generated ${result.metadata.totalPoints} 3D points with ${result.metadata.coverage_percentage.toFixed(1)}% coverage`);
     } catch (error) {
       console.error('Photogrammetry failed:', error);
       toast.error("3D reconstruction failed. Try uploading higher quality photos with better overlap.");
+      setPipelineStage('upload');
     } finally {
       setIsReconstructing(false);
     }
@@ -212,20 +227,20 @@ const Professional = () => {
                 )}
                 
                 {scanMode === 'upload' && (
-                  <PhotoUploader 
-                    onPhotosProcessed={handlePhotosProcessed}
-                    maxPhotos={20}
-                  />
-                )}
-                
-                {isReconstructing && (
-                  <div className="bg-card rounded-lg border border-border p-8 text-center">
-                    <div className="w-16 h-16 mx-auto border-4 border-primary/30 border-t-primary rounded-full animate-spin mb-4" />
-                    <h3 className="text-xl font-semibold mb-2">Processing Photogrammetry</h3>
-                    <p className="text-muted-foreground">
-                      Analyzing {uploadedPhotos.length} photos and reconstructing 3D model...
-                    </p>
-                  </div>
+                  <>
+                    <PhotoUploader 
+                      onPhotosProcessed={handlePhotosProcessed}
+                      maxPhotos={20}
+                    />
+                    
+                    {(uploadedPhotos.length > 0 || isReconstructing) && (
+                      <ProcessingPipeline 
+                        stage={pipelineStage}
+                        photoCount={uploadedPhotos.length}
+                        progress={reconstructionProgress}
+                      />
+                    )}
+                  </>
                 )}
               </div>
             </Card>
