@@ -3,8 +3,10 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Brain, Database, Calendar, MapPin, Microscope, Zap, Ruler, Shield, AlertTriangle, Info, Search, Download, Beaker, Clock, Wrench } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Brain, Database, Calendar, MapPin, Microscope, Zap, Upload, FileImage } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 interface AIAnalysisProps {
   scanData?: any;
@@ -45,6 +47,7 @@ interface AnalysisResult {
     confidence: number;
     verified: boolean;
   }>;
+  detailedAnalysis?: string;
 }
 
 export const AIAnalysis = ({ scanData, artifactImage }: AIAnalysisProps) => {
@@ -52,93 +55,86 @@ export const AIAnalysis = ({ scanData, artifactImage }: AIAnalysisProps) => {
   const [progress, setProgress] = useState(0);
   const [results, setResults] = useState<AnalysisResult | null>(null);
   const [currentStep, setCurrentStep] = useState<string>("");
+  const [uploadedImage, setUploadedImage] = useState<string | null>(artifactImage || null);
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setUploadedImage(reader.result as string);
+        toast.success("Image uploaded successfully");
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   const runAnalysis = async () => {
+    if (!uploadedImage) {
+      toast.error("Please upload an artifact image first");
+      return;
+    }
+
     setIsAnalyzing(true);
     setProgress(0);
     setResults(null);
 
-    const steps = [
-      { name: "Extracting visual features", duration: 1000 },
-      { name: "Analyzing material composition", duration: 1500 },
-      { name: "Comparing with global databases", duration: 2000 },
-      { name: "Determining cultural context", duration: 1200 },
-      { name: "Generating final assessment", duration: 800 }
-    ];
+    try {
+      const steps = [
+        "Uploading image to AI...",
+        "Analyzing visual features...",
+        "Identifying material composition...",
+        "Cross-referencing databases...",
+        "Generating report..."
+      ];
 
-    for (let i = 0; i < steps.length; i++) {
-      setCurrentStep(steps[i].name);
-      await new Promise(resolve => setTimeout(resolve, steps[i].duration));
-      setProgress((i + 1) * 20);
-    }
-
-    // Enhanced AI analysis results with professional archaeological data
-    const mockResults: AnalysisResult = {
-      material: "Ceramic pottery with temper inclusions",
-      confidence: 94,
-      period: "Late Bronze Age (1200-800 BCE)",
-      culture: "Canaanite",
-      function: "Storage vessel for grain or liquids",
-      location: "Southern Levant region (95% probability)",
-      dimensions: {
-        length: 64.5,
-        width: 42.3,
-        height: 38.7,
-        volume: 125.8,
-        accuracy: "±0.02mm"
-      },
-      condition: {
-        overall: "Good preservation",
-        damage: ["Minor rim chip", "Surface weathering", "Small crack at base"],
-        preservation: 0.78,
-        recommendations: ["Humidity control required", "Handle with support", "Document crack progression"]
-      },
-      verification: {
-        datasetSize: "250,000+ validated artifacts",
-        validationScore: 0.91,
-        crossReferences: 47,
-        uncertainties: ["Exact provenance requires excavation context", "Dating ±50 years due to stylistic variation"]
-      },
-      matches: [
-        {
-          name: "Storage Jar Fragment",
-          similarity: 89,
-          museum: "Israel Museum",
-          period: "1000-800 BCE",
-          confidence: 92,
-          verified: true
-        },
-        {
-          name: "Canaanite Pottery Vessel",
-          similarity: 85,
-          museum: "Metropolitan Museum",
-          period: "1200-1000 BCE",
-          confidence: 88,
-          verified: true
-        },
-        {
-          name: "Bronze Age Storage Jar",
-          similarity: 82,
-          museum: "British Museum",
-          period: "1100-900 BCE",
-          confidence: 84,
-          verified: false
+      let currentStepIndex = 0;
+      const progressInterval = setInterval(() => {
+        if (currentStepIndex < steps.length) {
+          setCurrentStep(steps[currentStepIndex]);
+          setProgress((currentStepIndex + 1) * 20);
+          currentStepIndex++;
         }
-      ]
-    };
+      }, 1500);
 
-    setResults(mockResults);
-    setIsAnalyzing(false);
-    setCurrentStep("");
-    toast.success("AI analysis complete!");
+      console.log("Calling analyze-artifact function...");
+      const { data, error } = await supabase.functions.invoke("analyze-artifact", {
+        body: {
+          imageData: uploadedImage,
+          scanData: scanData
+        }
+      });
+
+      clearInterval(progressInterval);
+
+      if (error) {
+        console.error("Analysis error:", error);
+        throw error;
+      }
+
+      if (!data) {
+        throw new Error("No analysis data received");
+      }
+
+      console.log("Analysis complete:", data);
+      setResults(data as AnalysisResult);
+      setProgress(100);
+      toast.success("AI analysis complete!");
+    } catch (error) {
+      console.error("Analysis failed:", error);
+      toast.error("Analysis failed. Please try again.");
+      setResults(null);
+    } finally {
+      setIsAnalyzing(false);
+      setCurrentStep("");
+    }
   };
 
   useEffect(() => {
-    if (scanData && !results) {
-      // Auto-run analysis when scan data is available
-      setTimeout(runAnalysis, 1000);
+    if (artifactImage) {
+      setUploadedImage(artifactImage);
     }
-  }, [scanData, results]);
+  }, [artifactImage]);
 
   const getConfidenceColor = (confidence: number) => {
     if (confidence >= 80) return "text-accent";
@@ -159,14 +155,54 @@ export const AIAnalysis = ({ scanData, artifactImage }: AIAnalysisProps) => {
       </div>
 
       {!isAnalyzing && !results && (
-        <div className="text-center space-y-4">
-          <Button onClick={runAnalysis} size="lg" className="bg-gradient-to-r from-professional-blue to-accent">
-            <Zap className="mr-2 h-5 w-5" />
-            Start AI Analysis
+        <div className="space-y-6">
+          <div className="flex flex-col items-center gap-4 p-6 border-2 border-dashed border-border rounded-lg">
+            {uploadedImage ? (
+              <div className="relative w-full max-w-md">
+                <img 
+                  src={uploadedImage} 
+                  alt="Uploaded artifact" 
+                  className="w-full h-auto rounded-lg"
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="absolute top-2 right-2"
+                  onClick={() => setUploadedImage(null)}
+                >
+                  Change Image
+                </Button>
+              </div>
+            ) : (
+              <label className="cursor-pointer flex flex-col items-center gap-3 py-8">
+                <div className="p-4 rounded-full bg-muted">
+                  <FileImage className="h-8 w-8 text-muted-foreground" />
+                </div>
+                <div className="text-center">
+                  <p className="font-medium text-foreground">Upload Artifact Image</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Click to select or drag and drop
+                  </p>
+                </div>
+                <Input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleImageUpload}
+                />
+              </label>
+            )}
+          </div>
+          
+          <Button 
+            onClick={runAnalysis} 
+            size="lg" 
+            className="w-full bg-gradient-to-r from-professional-blue to-accent"
+            disabled={!uploadedImage}
+          >
+            <Brain className="mr-2 h-5 w-5" />
+            Analyze with Gemini AI
           </Button>
-          <p className="text-sm text-muted-foreground">
-            Upload or scan an artifact to begin analysis
-          </p>
         </div>
       )}
 
@@ -184,6 +220,16 @@ export const AIAnalysis = ({ scanData, artifactImage }: AIAnalysisProps) => {
 
       {results && (
         <div className="space-y-6">
+          {uploadedImage && (
+            <div className="mb-4">
+              <img 
+                src={uploadedImage} 
+                alt="Analyzed artifact" 
+                className="w-full max-w-md mx-auto rounded-lg shadow-lg"
+              />
+            </div>
+          )}
+          
           {/* Primary Analysis */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-3">
@@ -230,6 +276,14 @@ export const AIAnalysis = ({ scanData, artifactImage }: AIAnalysisProps) => {
               </div>
             </div>
           </div>
+
+          {/* Detailed Analysis */}
+          {results.detailedAnalysis && (
+            <div className="space-y-3 p-4 rounded-lg bg-muted/30">
+              <h3 className="text-lg font-semibold text-foreground">Detailed Analysis</h3>
+              <p className="text-foreground leading-relaxed">{results.detailedAnalysis}</p>
+            </div>
+          )}
 
           {/* Similar Artifacts */}
           <div className="space-y-4">

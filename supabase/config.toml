@@ -1,0 +1,4 @@
+project_id = "wezcudgyixuybruphjmm"
+
+[functions.analyze-artifact]
+verify_jwt = false
