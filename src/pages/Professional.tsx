@@ -1,13 +1,14 @@
 import { useState, useRef, useCallback } from "react";
 import { Scanner3D } from "@/components/Scanner3D";
 import { PhotoUploader } from "@/components/PhotoUploader";
+import { ModelUploader } from "@/components/ModelUploader";
 import { Viewer3D } from "@/components/Viewer3D";
 import { AIAnalysis } from "@/components/AIAnalysis";
 import { ProcessingPipeline } from "@/components/ProcessingPipeline";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Upload, FileText, Users, Settings, Camera } from "lucide-react";
+import { Upload, FileText, Users, Settings, Camera, FileBox } from "lucide-react";
 import { analyzeImageQuality, removeBackground, loadImage, preprocessImage } from "@/lib/imageProcessing";
 import { generateCameraMatrices, reconstructPointCloud } from "@/lib/photogrammetry";
 import { type ImageQualityMetrics } from "@/lib/imageProcessing";
@@ -16,12 +17,13 @@ import { toast } from "sonner";
 const Professional = () => {
   const [scanData, setScanData] = useState(null);
   const [activeTab, setActiveTab] = useState("scan");
-  const [scanMode, setScanMode] = useState<'live' | 'upload'>('live');
+  const [scanMode, setScanMode] = useState<'live' | 'upload' | 'model'>('live');
   const [uploadedPhotos, setUploadedPhotos] = useState<HTMLImageElement[]>([]);
   const [photoQualities, setPhotoQualities] = useState<ImageQualityMetrics[]>([]);
   const [isReconstructing, setIsReconstructing] = useState(false);
   const [pipelineStage, setPipelineStage] = useState<'upload' | 'processing' | 'reconstructing' | 'complete'>('upload');
   const [reconstructionProgress, setReconstructionProgress] = useState(0);
+  const [modelFile, setModelFile] = useState<{ file: File; url: string } | null>(null);
 
   const handleScanComplete = (data: any) => {
     setScanData(data);
@@ -170,7 +172,24 @@ const Professional = () => {
       processUploads(e.target.files);
       e.currentTarget.value = '';
     }
-  }; 
+  };
+
+  const handleModelUploaded = (file: File, url: string) => {
+    setModelFile({ file, url });
+    const data = {
+      modelUrl: url,
+      modelFile: file,
+      timestamp: new Date().toISOString(),
+      quality: 'external',
+      metadata: {
+        filename: file.name,
+        size: `${(file.size / 1024 / 1024).toFixed(2)} MB`,
+        source: 'Meshroom/Polycam',
+      },
+    };
+    setScanData(data);
+    setActiveTab('viewer');
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-stone-light to-background">
@@ -202,14 +221,14 @@ const Professional = () => {
 
           <TabsContent value="scan" className="space-y-6">
             <Card className="p-6">
-              <div className="flex justify-center gap-4 mb-6">
+              <div className="flex justify-center gap-3 mb-6">
                 <Button
-                  variant={scanMode === 'live' ? 'default' : 'outline'}
-                  onClick={() => setScanMode('live')}
+                  variant={scanMode === 'model' ? 'default' : 'outline'}
+                  onClick={() => setScanMode('model')}
                   className="flex items-center gap-2"
                 >
-                  <Camera className="h-4 w-4" />
-                  Live Camera Scan
+                  <FileBox className="h-4 w-4" />
+                  Upload .glb Model
                 </Button>
                 <Button
                   variant={scanMode === 'upload' ? 'default' : 'outline'}
@@ -219,9 +238,21 @@ const Professional = () => {
                   <Upload className="h-4 w-4" />
                   Upload Photos
                 </Button>
+                <Button
+                  variant={scanMode === 'live' ? 'default' : 'outline'}
+                  onClick={() => setScanMode('live')}
+                  className="flex items-center gap-2"
+                >
+                  <Camera className="h-4 w-4" />
+                  Live Camera
+                </Button>
               </div>
               
               <div className="grid grid-cols-1 gap-6">
+                {scanMode === 'model' && (
+                  <ModelUploader onModelUploaded={handleModelUploaded} />
+                )}
+
                 {scanMode === 'live' && (
                   <Scanner3D onScanComplete={handleScanComplete} />
                 )}

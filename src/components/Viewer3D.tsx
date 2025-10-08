@@ -1,6 +1,6 @@
 import { Suspense, useRef, useState, useEffect } from 'react';
-import { Canvas, useFrame } from '@react-three/fiber';
-import { OrbitControls, Environment, ContactShadows, Text } from '@react-three/drei';
+import { Canvas, useFrame, useLoader } from '@react-three/fiber';
+import { OrbitControls, Environment, ContactShadows, Text, useGLTF } from '@react-three/drei';
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { RotateCcw, Maximize, Download, Ruler } from "lucide-react";
@@ -15,14 +15,24 @@ interface Viewer3DProps {
 }
 
 function ArtifactMesh({ scanData }: { scanData?: any }) {
-  const meshRef = useRef<THREE.Mesh>(null);
+  const meshRef = useRef<THREE.Group>(null);
   const [hovered, setHovered] = useState(false);
   const [reconstructionData, setReconstructionData] = useState<ReconstructionData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
+  // Load .glb model if available
+  let gltfModel = null;
+  try {
+    if (scanData?.modelUrl) {
+      gltfModel = useGLTF(scanData.modelUrl);
+    }
+  } catch (error) {
+    console.error('Failed to load .glb model:', error);
+  }
+
   // Reconstruct 3D model from scan data
   useEffect(() => {
-    if (!scanData?.images || scanData.images.length === 0) {
+    if (!scanData?.images || scanData.images.length === 0 || scanData?.modelUrl) {
       return;
     }
 
@@ -55,6 +65,20 @@ function ArtifactMesh({ scanData }: { scanData?: any }) {
     );
   }
 
+  // If .glb model is loaded, display it
+  if (gltfModel && 'scene' in gltfModel) {
+    return (
+      <group
+        ref={meshRef}
+        onPointerOver={() => setHovered(true)}
+        onPointerOut={() => setHovered(false)}
+        scale={hovered ? 1.1 : 1}
+      >
+        <primitive object={gltfModel.scene} />
+      </group>
+    );
+  }
+
   // Use reconstructed data if available, otherwise show placeholder
   const geometry = reconstructionData?.geometry || new THREE.BoxGeometry(2, 1, 0.5);
   const material = reconstructionData?.material || new THREE.MeshStandardMaterial({
@@ -66,7 +90,7 @@ function ArtifactMesh({ scanData }: { scanData?: any }) {
 
   return (
     <mesh
-      ref={meshRef}
+      ref={meshRef as any}
       onPointerOver={() => setHovered(true)}
       onPointerOut={() => setHovered(false)}
       scale={hovered ? 1.1 : 1}
