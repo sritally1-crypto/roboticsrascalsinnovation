@@ -66,20 +66,10 @@ export const PhotoUploader = ({ onPhotosProcessed, maxPhotos = 20 }: PhotoUpload
       setPhotoQualities(allQualities);
       setProcessedImages(allImages);
       
-      // Check if we have enough photos for reconstruction
-      const highQualityCount = allQualities.filter(q => q.score >= 0.7).length;
-      
-      if (updatedPhotos.length >= 8 && highQualityCount >= 6) {
-        toast.success(`${updatedPhotos.length} photos ready for 3D reconstruction! ${highQualityCount} high quality.`);
+      // Process photos for documentation and AI analysis
+      if (updatedPhotos.length > 0) {
+        toast.success(`${updatedPhotos.length} photos uploaded for AI analysis and documentation`);
         onPhotosProcessed(allImages, allQualities);
-      } else if (updatedPhotos.length >= 8) {
-        toast(`${updatedPhotos.length} photos uploaded. Need ${Math.max(0, 6 - highQualityCount)} more high-quality photos for optimal reconstruction.`);
-        onPhotosProcessed(allImages, allQualities);
-      } else {
-        toast(`${updatedPhotos.length} photos uploaded. Need ${Math.max(0, 8 - updatedPhotos.length)} more for 3D reconstruction.`);
-        if (allImages.length > 0) {
-          onPhotosProcessed(allImages, allQualities);
-        }
       }
     } catch (error) {
       console.error('Error processing photos:', error);
@@ -143,10 +133,15 @@ export const PhotoUploader = ({ onPhotosProcessed, maxPhotos = 20 }: PhotoUpload
     <Card className="p-6">
       <div className="space-y-6">
         <div className="text-center">
-          <h3 className="text-xl font-semibold mb-2">Upload Photos for 3D Reconstruction</h3>
+          <h3 className="text-xl font-semibold mb-2">Upload Photos for Documentation & AI Analysis</h3>
           <p className="text-muted-foreground text-sm">
-            Upload 8-20 photos of your artifact from different angles for accurate photogrammetry
+            Upload photos of your artifact for AI analysis and documentation
           </p>
+          <div className="mt-3 p-3 bg-accent/10 rounded-lg border border-accent/20">
+            <p className="text-sm text-muted-foreground">
+              ⚠️ For 3D models, use <strong>Meshroom</strong> or <strong>Polycam</strong> to create .glb files, then upload them in the "Upload .glb Model" section.
+            </p>
+          </div>
         </div>
 
         {/* Upload Area */}
@@ -179,15 +174,13 @@ export const PhotoUploader = ({ onPhotosProcessed, maxPhotos = 20 }: PhotoUpload
         <div className="bg-accent/10 p-4 rounded-lg border border-accent/20">
           <h4 className="font-semibold mb-2 flex items-center">
             <Camera className="mr-2 h-4 w-4" />
-            Photography Guidelines for Best Results
+            Photography Guidelines for Documentation
           </h4>
           <ul className="text-sm space-y-1 text-muted-foreground">
-            <li>• Capture 8-20 photos from different angles around the object</li>
-            <li>• Ensure 60-80% overlap between adjacent photos</li>
-            <li>• Use consistent, diffused lighting (avoid harsh shadows)</li>
-            <li>• Include scale reference (coin, ruler) for accurate measurements</li>
-            <li>• Keep the object stationary, move the camera in a circle</li>
-            <li>• Take photos at multiple heights (low, medium, high angles)</li>
+            <li>• Use consistent, diffused lighting</li>
+            <li>• Include scale reference (coin, ruler) for context</li>
+            <li>• Capture multiple angles for comprehensive documentation</li>
+            <li>• These photos will be used for AI analysis and visual records</li>
           </ul>
         </div>
 
@@ -257,27 +250,23 @@ export const PhotoUploader = ({ onPhotosProcessed, maxPhotos = 20 }: PhotoUpload
               ))}
             </div>
 
-            {/* Reconstruction Status */}
+            {/* Documentation Status */}
             <div className="bg-card border rounded-lg p-4">
-              <h5 className="font-medium mb-2">Reconstruction Readiness</h5>
+              <h5 className="font-medium mb-2">Documentation Status</h5>
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
-                  <span>Minimum photos (8):</span>
-                  <span className={uploadedPhotos.length >= 8 ? 'text-green-500' : 'text-muted-foreground'}>
-                    {uploadedPhotos.length >= 8 ? '✓ Met' : `${uploadedPhotos.length}/8`}
+                  <span>Photos uploaded:</span>
+                  <span className="text-green-500">✓ {uploadedPhotos.length}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span>Average quality:</span>
+                  <span className={averageQuality >= 0.7 ? 'text-green-500' : 'text-yellow-500'}>
+                    {Math.round(averageQuality * 100)}%
                   </span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span>High quality photos (≥70%):</span>
-                  <span className={photoQualities.filter(q => q.score >= 0.7).length >= 6 ? 'text-green-500' : 'text-muted-foreground'}>
-                    {photoQualities.filter(q => q.score >= 0.7).length}/6+ recommended
-                  </span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span>Ready for 3D reconstruction:</span>
-                  <span className={uploadedPhotos.length >= 8 && photoQualities.filter(q => q.score >= 0.6).length >= 6 ? 'text-green-500' : 'text-yellow-500'}>
-                    {uploadedPhotos.length >= 8 && photoQualities.filter(q => q.score >= 0.6).length >= 6 ? '✓ Ready' : 'Need more quality photos'}
-                  </span>
+                  <span>Ready for AI analysis:</span>
+                  <span className="text-green-500">✓ Ready</span>
                 </div>
               </div>
             </div>

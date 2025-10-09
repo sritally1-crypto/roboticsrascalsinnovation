@@ -4,13 +4,11 @@ import { PhotoUploader } from "@/components/PhotoUploader";
 import { ModelUploader } from "@/components/ModelUploader";
 import { Viewer3D } from "@/components/Viewer3D";
 import { AIAnalysis } from "@/components/AIAnalysis";
-import { ProcessingPipeline } from "@/components/ProcessingPipeline";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Upload, FileText, Users, Settings, Camera, FileBox } from "lucide-react";
 import { analyzeImageQuality, removeBackground, loadImage, preprocessImage } from "@/lib/imageProcessing";
-import { generateCameraMatrices, reconstructPointCloud } from "@/lib/photogrammetry";
 import { type ImageQualityMetrics } from "@/lib/imageProcessing";
 import { toast } from "sonner";
 
@@ -18,11 +16,6 @@ const Professional = () => {
   const [scanData, setScanData] = useState(null);
   const [activeTab, setActiveTab] = useState("scan");
   const [scanMode, setScanMode] = useState<'live' | 'upload' | 'model'>('live');
-  const [uploadedPhotos, setUploadedPhotos] = useState<HTMLImageElement[]>([]);
-  const [photoQualities, setPhotoQualities] = useState<ImageQualityMetrics[]>([]);
-  const [isReconstructing, setIsReconstructing] = useState(false);
-  const [pipelineStage, setPipelineStage] = useState<'upload' | 'processing' | 'reconstructing' | 'complete'>('upload');
-  const [reconstructionProgress, setReconstructionProgress] = useState(0);
   const [modelFile, setModelFile] = useState<{ file: File; url: string } | null>(null);
 
   const handleScanComplete = (data: any) => {
@@ -32,67 +25,22 @@ const Professional = () => {
   };
 
   const handlePhotosProcessed = async (photos: HTMLImageElement[], qualities: ImageQualityMetrics[]) => {
-    setUploadedPhotos(photos);
-    setPhotoQualities(qualities);
-    setPipelineStage('processing');
+    // Photos are now for documentation and AI analysis only
+    const reconstructionData = {
+      images: photos.map(photo => photo.src),
+      processedImages: photos.map(photo => photo.src),
+      qualities: qualities,
+      timestamp: new Date().toISOString(),
+      imageCount: photos.length,
+      quality: 'documentation',
+      metadata: {
+        cameraSpecs: `${photos.length} photos for documentation`,
+        source: 'Photo upload',
+      }
+    };
     
-    // Simulate quality analysis phase
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    if (photos.length >= 8) {
-      // Automatically start 3D reconstruction when enough photos are uploaded
-      await processPhotogrammetry(photos, qualities);
-    }
-  };
-
-  const processPhotogrammetry = async (photos: HTMLImageElement[], qualities: ImageQualityMetrics[]) => {
-    setIsReconstructing(true);
-    setPipelineStage('reconstructing');
-    setReconstructionProgress(0);
-    toast("Starting photogrammetry reconstruction...");
-    
-    try {
-      // Generate camera matrices
-      setReconstructionProgress(20);
-      const cameraMatrices = generateCameraMatrices(photos.length);
-      
-      // Perform 3D reconstruction with progress updates
-      setReconstructionProgress(40);
-      const result = await reconstructPointCloud(photos, cameraMatrices);
-      setReconstructionProgress(80);
-      
-      // Convert to scan data format
-      const reconstructionData = {
-        images: photos.map(photo => photo.src),
-        processedImages: photos.map(photo => photo.src),
-        qualities: qualities,
-        timestamp: new Date().toISOString(),
-        imageCount: photos.length,
-        quality: result.metadata.coverage_percentage > 80 ? 'excellent' : result.metadata.coverage_percentage > 60 ? 'good' : 'fair',
-        photogrammetryResult: result,
-        metadata: {
-          ...result.metadata,
-          cameraSpecs: `${photos.length} photos photogrammetry`,
-          aiEnhanced: true,
-          backgroundRemoved: false,
-          reconstructionMethod: 'multi-view-photogrammetry',
-          featurePoints: result.metadata.totalPoints
-        }
-      };
-      
-      setReconstructionProgress(100);
-      setScanData(reconstructionData);
-      setPipelineStage('complete');
-      setActiveTab("viewer");
-      
-      toast.success(`Photogrammetry complete! Generated ${result.metadata.totalPoints} 3D points with ${result.metadata.coverage_percentage.toFixed(1)}% coverage`);
-    } catch (error) {
-      console.error('Photogrammetry failed:', error);
-      toast.error("3D reconstruction failed. Try uploading higher quality photos with better overlap.");
-      setPipelineStage('upload');
-    } finally {
-      setIsReconstructing(false);
-    }
+    setScanData(reconstructionData);
+    toast.success(`${photos.length} photos uploaded for AI analysis and documentation`);
   };
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -226,9 +174,10 @@ const Professional = () => {
                   variant={scanMode === 'model' ? 'default' : 'outline'}
                   onClick={() => setScanMode('model')}
                   className="flex items-center gap-2"
+                  size="lg"
                 >
-                  <FileBox className="h-4 w-4" />
-                  Upload .glb Model
+                  <FileBox className="h-5 w-5" />
+                  Upload .glb Model (Recommended)
                 </Button>
                 <Button
                   variant={scanMode === 'upload' ? 'default' : 'outline'}
@@ -236,7 +185,7 @@ const Professional = () => {
                   className="flex items-center gap-2"
                 >
                   <Upload className="h-4 w-4" />
-                  Upload Photos
+                  Upload Photos (Documentation)
                 </Button>
                 <Button
                   variant={scanMode === 'live' ? 'default' : 'outline'}
@@ -258,20 +207,10 @@ const Professional = () => {
                 )}
                 
                 {scanMode === 'upload' && (
-                  <>
-                    <PhotoUploader 
-                      onPhotosProcessed={handlePhotosProcessed}
-                      maxPhotos={20}
-                    />
-                    
-                    {(uploadedPhotos.length > 0 || isReconstructing) && (
-                      <ProcessingPipeline 
-                        stage={pipelineStage}
-                        photoCount={uploadedPhotos.length}
-                        progress={reconstructionProgress}
-                      />
-                    )}
-                  </>
+                  <PhotoUploader 
+                    onPhotosProcessed={handlePhotosProcessed}
+                    maxPhotos={20}
+                  />
                 )}
               </div>
             </Card>
