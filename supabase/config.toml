@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.upload-reconstruction-photos]
 verify_jwt = true
+
+[functions.rodin-reconstruct]
+verify_jwt = true

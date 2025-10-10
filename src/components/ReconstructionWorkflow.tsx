@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { FileImage, Upload, ExternalLink, CheckCircle2, Loader2 } from 'lucide-react';
+import { Sparkles, FileImage, Loader2, CheckCircle2, AlertCircle, ExternalLink } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -16,10 +16,58 @@ interface ReconstructionWorkflowProps {
 export const ReconstructionWorkflow = ({ onModelGenerated }: ReconstructionWorkflowProps) => {
   const [artifactName, setArtifactName] = useState('');
   const [photos, setPhotos] = useState<File[]>([]);
-  const [uploading, setUploading] = useState(false);
-  const [jobId, setJobId] = useState<string | null>(null);
-  const [signedUrls, setSignedUrls] = useState<string[]>([]);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [taskId, setTaskId] = useState<string | null>(null);
+  const [processingStatus, setProcessingStatus] = useState('');
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [modelUrl, setModelUrl] = useState<string | null>(null);
+  const [viewerUrl, setViewerUrl] = useState<string | null>(null);
+
+  // Poll for task status
+  useEffect(() => {
+    if (!taskId || !isProcessing) return;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const formData = new FormData();
+        formData.append('action', 'status');
+        formData.append('taskId', taskId);
+
+        const { data, error } = await supabase.functions.invoke('rodin-reconstruct', {
+          body: formData,
+        });
+
+        if (error) throw error;
+
+        console.log('Status update:', data);
+        
+        if (data.status === 'succeeded') {
+          setProcessingStatus('completed');
+          setModelUrl(data.modelUrl);
+          setViewerUrl(data.viewerUrl);
+          setIsProcessing(false);
+          setUploadProgress(100);
+          toast.success('3D model generated successfully!');
+          if (data.modelUrl) {
+            onModelGenerated?.(data.modelUrl);
+          }
+          clearInterval(pollInterval);
+        } else if (data.status === 'failed') {
+          setProcessingStatus('failed');
+          setIsProcessing(false);
+          toast.error('3D reconstruction failed. Please try again.');
+          clearInterval(pollInterval);
+        } else {
+          setProcessingStatus(data.status);
+          setUploadProgress(data.progress || 0);
+        }
+      } catch (error) {
+        console.error('Error checking status:', error);
+      }
+    }, 5000); // Poll every 5 seconds
+
+    return () => clearInterval(pollInterval);
+  }, [taskId, isProcessing, onModelGenerated]);
 
   const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -27,10 +75,15 @@ export const ReconstructionWorkflow = ({ onModelGenerated }: ReconstructionWorkf
       toast.error('Please upload at least 10 photos for accurate reconstruction');
       return;
     }
+    if (files.length > 50) {
+      toast.error('Maximum 50 photos allowed');
+      return;
+    }
     setPhotos(files);
+    toast.success(`${files.length} photos selected`);
   };
 
-  const handleUpload = async () => {
+  const handleReconstruct = async () => {
     if (!artifactName.trim()) {
       toast.error('Please enter an artifact name');
       return;
@@ -41,107 +94,66 @@ export const ReconstructionWorkflow = ({ onModelGenerated }: ReconstructionWorkf
       return;
     }
 
-    setUploading(true);
-    setUploadProgress(10);
-
     try {
+      setIsProcessing(true);
+      setUploadProgress(10);
+      setProcessingStatus('uploading');
+
+      // Create FormData with images
       const formData = new FormData();
+      formData.append('action', 'submit');
       formData.append('artifactName', artifactName);
-      photos.forEach(photo => formData.append('photos', photo));
+      
+      photos.forEach((photo, index) => {
+        formData.append(`image_${index}`, photo);
+      });
 
       setUploadProgress(30);
+      setProcessingStatus('submitting');
+      toast.info('Submitting to Rodin AI...');
 
-      const { data, error } = await supabase.functions.invoke('upload-reconstruction-photos', {
+      // Submit to Rodin via edge function
+      const { data, error } = await supabase.functions.invoke('rodin-reconstruct', {
         body: formData,
       });
 
       if (error) throw error;
 
-      setUploadProgress(100);
-      setJobId(data.jobId);
-      setSignedUrls(data.signedUrls);
+      setTaskId(data.taskId);
+      setUploadProgress(50);
+      setProcessingStatus('processing');
+      toast.success('Reconstruction started! This may take 5-10 minutes...');
       
-      toast.success(`Uploaded ${data.photoCount} photos successfully!`);
     } catch (error) {
-      console.error('Upload error:', error);
-      toast.error('Failed to upload photos');
-    } finally {
-      setUploading(false);
+      console.error('Reconstruction error:', error);
+      toast.error('Failed to start reconstruction. Please check your API key.');
+      setIsProcessing(false);
     }
   };
 
-  const generateColabNotebook = () => {
-    if (!jobId || signedUrls.length === 0) return;
-
-    const notebookContent = `# Archaeo-Link 3D Reconstruction
-# Artifact: ${artifactName}
-# Job ID: ${jobId}
-
-# Step 1: Install dependencies
-!apt update && apt install -y colmap
-!pip install trimesh pygltflib requests
-
-# Step 2: Download photos from Supabase
-import requests
-import os
-from pathlib import Path
-
-photo_urls = ${JSON.stringify(signedUrls, null, 2)}
-
-img_folder = Path("/content/images")
-img_folder.mkdir(exist_ok=True)
-
-for i, url in enumerate(photo_urls):
-    response = requests.get(url)
-    with open(img_folder / f"photo_{i+1}.jpg", 'wb') as f:
-        f.write(response.content)
-    print(f"Downloaded photo {i+1}/{len(photo_urls)}")
-
-# Step 3: Run COLMAP photogrammetry
-!mkdir -p /content/output/sparse /content/output/dense
-!colmap feature_extractor --database_path /content/output/database.db --image_path /content/images
-!colmap exhaustive_matcher --database_path /content/output/database.db
-!colmap mapper --database_path /content/output/database.db --image_path /content/images --output_path /content/output/sparse
-!colmap image_undistorter --image_path /content/images --input_path /content/output/sparse/0 --output_path /content/output/dense --output_type COLMAP
-!colmap patch_match_stereo --workspace_path /content/output/dense --workspace_format COLMAP --PatchMatchStereo.geom_consistency true
-!colmap stereo_fusion --workspace_path /content/output/dense --workspace_format COLMAP --input_type geometric --output_path /content/output/dense/fused.ply
-!colmap poisson_mesher --input_path /content/output/dense/fused.ply --output_path /content/output/dense/meshed.ply
-
-# Step 4: Convert to GLB
-import trimesh
-mesh = trimesh.load('/content/output/dense/meshed.ply')
-mesh.export('/content/output/meshed.glb')
-
-# Step 5: Download the result
-from google.colab import files
-files.download('/content/output/meshed.glb')
-
-print("✅ 3D Model generated! Upload the .glb file to Archaeo-Link.")
-`;
-
-    const blob = new Blob([notebookContent], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `archaeo_link_${jobId}.py`;
-    a.click();
-    URL.revokeObjectURL(url);
-
-    toast.success('Colab script downloaded! Follow the instructions below.');
+  const resetWorkflow = () => {
+    setTaskId(null);
+    setPhotos([]);
+    setArtifactName('');
+    setModelUrl(null);
+    setViewerUrl(null);
+    setProcessingStatus('');
+    setUploadProgress(0);
   };
 
   return (
     <Card className="p-6 space-y-6">
       <div>
-        <h3 className="text-xl font-semibold text-foreground mb-2">
-          Free 3D Reconstruction with Google Colab
+        <h3 className="text-xl font-semibold text-foreground mb-2 flex items-center gap-2">
+          <Sparkles className="h-5 w-5 text-primary" />
+          AI-Powered 3D Reconstruction
         </h3>
         <p className="text-sm text-muted-foreground">
-          Upload photos, then process them with free COLMAP photogrammetry in Google Colab
+          Upload 10+ photos from different angles. Rodin AI will automatically generate a high-quality 3D model in minutes!
         </p>
       </div>
 
-      {!jobId ? (
+      {!modelUrl ? (
         <div className="space-y-4">
           <div>
             <Label htmlFor="artifact-name">Artifact Name</Label>
@@ -150,19 +162,19 @@ print("✅ 3D Model generated! Upload the .glb file to Archaeo-Link.")
               value={artifactName}
               onChange={(e) => setArtifactName(e.target.value)}
               placeholder="e.g., Ancient Pottery Fragment"
-              disabled={uploading}
+              disabled={isProcessing}
             />
           </div>
 
           <div>
             <Label htmlFor="photos">
-              Photos (minimum 10, recommended 20-50)
+              Photos (10-50 images recommended)
             </Label>
             <div className="mt-2 flex items-center gap-4">
               <Button
                 variant="outline"
                 onClick={() => document.getElementById('photo-input')?.click()}
-                disabled={uploading}
+                disabled={isProcessing}
                 className="w-full"
               >
                 <FileImage className="mr-2 h-4 w-4" />
@@ -188,125 +200,111 @@ print("✅ 3D Model generated! Upload the .glb file to Archaeo-Link.")
             <AlertDescription className="text-sm">
               <strong>Photo Tips:</strong>
               <ul className="list-disc ml-4 mt-2 space-y-1">
-                <li>Take 20-50 photos from all angles</li>
+                <li>Take 20-50 photos from all angles (360° coverage)</li>
                 <li>Overlap each photo by 60-80%</li>
-                <li>Use good lighting (avoid shadows)</li>
-                <li>Keep the artifact in focus</li>
+                <li>Use consistent, even lighting</li>
+                <li>Keep artifact in sharp focus</li>
+                <li>Avoid reflective surfaces and shadows</li>
               </ul>
             </AlertDescription>
           </Alert>
 
-          {uploading && (
+          {isProcessing && (
             <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="capitalize">{processingStatus.replace('_', ' ')}</span>
+                <span>{Math.round(uploadProgress)}%</span>
+              </div>
               <Progress value={uploadProgress} />
               <p className="text-sm text-muted-foreground text-center">
-                Uploading {photos.length} photos...
+                {processingStatus === 'processing' 
+                  ? 'Rodin AI is reconstructing your 3D model... This may take 5-10 minutes.' 
+                  : 'Uploading photos to Rodin...'}
               </p>
             </div>
           )}
 
           <Button
-            onClick={handleUpload}
-            disabled={uploading || photos.length < 10 || !artifactName.trim()}
+            onClick={handleReconstruct}
+            disabled={isProcessing || photos.length < 10 || !artifactName.trim()}
             className="w-full"
+            size="lg"
           >
-            {uploading ? (
+            {isProcessing ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Uploading...
+                Processing with Rodin AI...
               </>
             ) : (
               <>
-                <Upload className="mr-2 h-4 w-4" />
-                Upload Photos
+                <Sparkles className="mr-2 h-4 w-4" />
+                Generate 3D Model with AI
               </>
             )}
           </Button>
+
+          <Alert>
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription className="text-xs">
+              <strong>Powered by Hyper3D Rodin:</strong> State-of-the-art AI photogrammetry that automatically reconstructs high-quality 3D models from photos. Processing typically takes 5-10 minutes.
+            </AlertDescription>
+          </Alert>
         </div>
       ) : (
         <div className="space-y-6">
           <Alert className="bg-primary/10 border-primary">
             <CheckCircle2 className="h-4 w-4 text-primary" />
             <AlertDescription>
-              <strong>Photos uploaded successfully!</strong> Follow the steps below to generate your 3D model.
+              <strong>3D Model Generated Successfully!</strong>
+              <p className="mt-2 text-sm">Your artifact has been reconstructed by Rodin AI.</p>
             </AlertDescription>
           </Alert>
 
           <div className="space-y-4">
-            <div className="flex items-start gap-3">
-              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-semibold">
-                1
-              </div>
-              <div className="flex-1">
-                <h4 className="font-semibold mb-1">Download Colab Script</h4>
-                <p className="text-sm text-muted-foreground mb-2">
-                  Download the Python script pre-configured with your photos
+            <div className="p-4 border rounded-lg bg-card space-y-3">
+              <div>
+                <h4 className="font-semibold mb-1">Artifact: {artifactName}</h4>
+                <p className="text-sm text-muted-foreground">
+                  Generated from {photos.length} photos
                 </p>
-                <Button variant="outline" size="sm" onClick={generateColabNotebook}>
-                  Download Script
-                </Button>
               </div>
-            </div>
 
-            <div className="flex items-start gap-3">
-              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-semibold">
-                2
-              </div>
-              <div className="flex-1">
-                <h4 className="font-semibold mb-1">Open Google Colab</h4>
-                <p className="text-sm text-muted-foreground mb-2">
-                  Free GPU processing (no account limits)
-                </p>
+              {viewerUrl && (
                 <Button
                   variant="outline"
-                  size="sm"
-                  onClick={() => window.open('https://colab.research.google.com/', '_blank')}
+                  className="w-full"
+                  onClick={() => window.open(viewerUrl, '_blank')}
                 >
-                  <ExternalLink className="mr-2 h-3 w-3" />
-                  Open Colab
+                  <ExternalLink className="mr-2 h-4 w-4" />
+                  View in Rodin 3D Viewer
                 </Button>
-              </div>
+              )}
+
+              {modelUrl && (
+                <Button
+                  className="w-full"
+                  onClick={() => window.open(modelUrl, '_blank')}
+                >
+                  Download .glb Model
+                </Button>
+              )}
             </div>
 
-            <div className="flex items-start gap-3">
-              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-semibold">
-                3
-              </div>
-              <div className="flex-1">
-                <h4 className="font-semibold mb-1">Run the Script</h4>
-                <p className="text-sm text-muted-foreground">
-                  Upload the script to Colab → Run all cells → Wait 10-20 minutes → Download the .glb file
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-3">
-              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-semibold">
-                4
-              </div>
-              <div className="flex-1">
-                <h4 className="font-semibold mb-1">Upload 3D Model</h4>
-                <p className="text-sm text-muted-foreground mb-2">
-                  Upload the generated .glb file using the "Upload 3D Model" section above
-                </p>
-              </div>
-            </div>
+            <Alert>
+              <AlertDescription className="text-sm">
+                <strong>Next Steps:</strong>
+                <ol className="list-decimal ml-4 mt-2 space-y-1">
+                  <li>Download the .glb model file</li>
+                  <li>Upload it using "Upload .glb Model" button above</li>
+                  <li>Explore your 3D artifact with measurements and AI analysis</li>
+                </ol>
+              </AlertDescription>
+            </Alert>
           </div>
-
-          <Alert>
-            <AlertDescription className="text-sm">
-              <strong>Processing Time:</strong> COLMAP reconstruction typically takes 10-20 minutes depending on photo count and quality. The process is completely free using Google Colab's GPU.
-            </AlertDescription>
-          </Alert>
 
           <Button
             variant="outline"
-            onClick={() => {
-              setJobId(null);
-              setPhotos([]);
-              setArtifactName('');
-              setSignedUrls([]);
-            }}
+            onClick={resetWorkflow}
             className="w-full"
           >
             Start New Reconstruction
