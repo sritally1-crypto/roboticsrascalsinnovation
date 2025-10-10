@@ -4,10 +4,11 @@ import { PhotoUploader } from "@/components/PhotoUploader";
 import { ModelUploader } from "@/components/ModelUploader";
 import { Viewer3D } from "@/components/Viewer3D";
 import { AIAnalysis } from "@/components/AIAnalysis";
+import { ReconstructionWorkflow } from "@/components/ReconstructionWorkflow";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Upload, FileText, Users, Settings, Camera, FileBox } from "lucide-react";
+import { Upload, FileText, Users, Settings, Camera, FileBox, Cpu } from "lucide-react";
 import { analyzeImageQuality, removeBackground, loadImage, preprocessImage } from "@/lib/imageProcessing";
 import { type ImageQualityMetrics } from "@/lib/imageProcessing";
 import { toast } from "sonner";
@@ -15,7 +16,7 @@ import { toast } from "sonner";
 const Professional = () => {
   const [scanData, setScanData] = useState(null);
   const [activeTab, setActiveTab] = useState("scan");
-  const [scanMode, setScanMode] = useState<'live' | 'upload' | 'model'>('live');
+  const [scanMode, setScanMode] = useState<'live' | 'upload' | 'model' | 'reconstruction'>('model');
   const [modelFile, setModelFile] = useState<{ file: File; url: string } | null>(null);
 
   const handleScanComplete = (data: any) => {
@@ -169,7 +170,7 @@ const Professional = () => {
 
           <TabsContent value="scan" className="space-y-6">
             <Card className="p-6">
-              <div className="flex justify-center gap-3 mb-6">
+              <div className="flex justify-center gap-2 mb-6 flex-wrap">
                 <Button
                   variant={scanMode === 'model' ? 'default' : 'outline'}
                   onClick={() => setScanMode('model')}
@@ -177,7 +178,16 @@ const Professional = () => {
                   size="lg"
                 >
                   <FileBox className="h-5 w-5" />
-                  Upload .glb Model (Recommended)
+                  Upload .glb Model
+                </Button>
+                <Button
+                  variant={scanMode === 'reconstruction' ? 'default' : 'outline'}
+                  onClick={() => setScanMode('reconstruction')}
+                  className="flex items-center gap-2"
+                  size="lg"
+                >
+                  <Cpu className="h-5 w-5" />
+                  3D Reconstruction (Free)
                 </Button>
                 <Button
                   variant={scanMode === 'upload' ? 'default' : 'outline'}
@@ -185,7 +195,7 @@ const Professional = () => {
                   className="flex items-center gap-2"
                 >
                   <Upload className="h-4 w-4" />
-                  Upload Photos (Documentation)
+                  Upload Photos
                 </Button>
                 <Button
                   variant={scanMode === 'live' ? 'default' : 'outline'}
@@ -200,6 +210,14 @@ const Professional = () => {
               <div className="grid grid-cols-1 gap-6">
                 {scanMode === 'model' && (
                   <ModelUploader onModelUploaded={handleModelUploaded} />
+                )}
+
+                {scanMode === 'reconstruction' && (
+                  <ReconstructionWorkflow 
+                    onModelGenerated={(modelUrl) => {
+                      toast.success('Model generated! Upload it using the "Upload .glb Model" button above.');
+                    }}
+                  />
                 )}
 
                 {scanMode === 'live' && (

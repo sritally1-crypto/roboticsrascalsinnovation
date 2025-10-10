@@ -14,7 +14,48 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      reconstruction_jobs: {
+        Row: {
+          artifact_name: string
+          colab_notebook_id: string | null
+          completed_at: string | null
+          created_at: string | null
+          id: string
+          model_url: string | null
+          photo_count: number | null
+          status: string
+          storage_path: string | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          artifact_name: string
+          colab_notebook_id?: string | null
+          completed_at?: string | null
+          created_at?: string | null
+          id?: string
+          model_url?: string | null
+          photo_count?: number | null
+          status?: string
+          storage_path?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          artifact_name?: string
+          colab_notebook_id?: string | null
+          completed_at?: string | null
+          created_at?: string | null
+          id?: string
+          model_url?: string | null
+          photo_count?: number | null
+          status?: string
+          storage_path?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
