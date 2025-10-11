@@ -1,13 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Sparkles, FileImage, Loader2, CheckCircle2, AlertCircle, ExternalLink } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { Sparkles, FileImage, Loader2, CheckCircle2, AlertCircle, Download } from 'lucide-react';
 import { toast } from 'sonner';
+import { reconstructFrom3DPhotos } from '@/lib/browserPhotogrammetry';
 
 interface ReconstructionWorkflowProps {
   onModelGenerated?: (modelUrl: string) => void;
@@ -17,66 +17,18 @@ export const ReconstructionWorkflow = ({ onModelGenerated }: ReconstructionWorkf
   const [artifactName, setArtifactName] = useState('');
   const [photos, setPhotos] = useState<File[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [taskId, setTaskId] = useState<string | null>(null);
   const [processingStatus, setProcessingStatus] = useState('');
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [modelUrl, setModelUrl] = useState<string | null>(null);
-  const [viewerUrl, setViewerUrl] = useState<string | null>(null);
-
-  // Poll for task status
-  useEffect(() => {
-    if (!taskId || !isProcessing) return;
-
-    const pollInterval = setInterval(async () => {
-      try {
-        const formData = new FormData();
-        formData.append('action', 'status');
-        formData.append('taskId', taskId);
-
-        const { data, error } = await supabase.functions.invoke('rodin-reconstruct', {
-          body: formData,
-        });
-
-        if (error) throw error;
-
-        console.log('Status update:', data);
-        
-        if (data.status === 'succeeded') {
-          setProcessingStatus('completed');
-          setModelUrl(data.modelUrl);
-          setViewerUrl(data.viewerUrl);
-          setIsProcessing(false);
-          setUploadProgress(100);
-          toast.success('3D model generated successfully!');
-          if (data.modelUrl) {
-            onModelGenerated?.(data.modelUrl);
-          }
-          clearInterval(pollInterval);
-        } else if (data.status === 'failed') {
-          setProcessingStatus('failed');
-          setIsProcessing(false);
-          toast.error('3D reconstruction failed. Please try again.');
-          clearInterval(pollInterval);
-        } else {
-          setProcessingStatus(data.status);
-          setUploadProgress(data.progress || 0);
-        }
-      } catch (error) {
-        console.error('Error checking status:', error);
-      }
-    }, 5000); // Poll every 5 seconds
-
-    return () => clearInterval(pollInterval);
-  }, [taskId, isProcessing, onModelGenerated]);
+  const [modelBlob, setModelBlob] = useState<Blob | null>(null);
 
   const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    if (files.length < 10) {
-      toast.error('Please upload at least 10 photos for accurate reconstruction');
+    if (files.length < 3) {
+      toast.error('Please upload at least 3 photos for reconstruction');
       return;
     }
-    if (files.length > 50) {
-      toast.error('Maximum 50 photos allowed');
+    if (files.length > 20) {
+      toast.error('Maximum 20 photos allowed for browser processing');
       return;
     }
     setPhotos(files);
@@ -89,56 +41,60 @@ export const ReconstructionWorkflow = ({ onModelGenerated }: ReconstructionWorkf
       return;
     }
 
-    if (photos.length < 10) {
-      toast.error('Please upload at least 10 photos');
+    if (photos.length < 3) {
+      toast.error('Please upload at least 3 photos');
       return;
     }
 
     try {
       setIsProcessing(true);
-      setUploadProgress(10);
-      setProcessingStatus('uploading');
+      setProcessingStatus('loading');
+      toast.info('Starting in-browser 3D reconstruction...');
 
-      // Create FormData with images
-      const formData = new FormData();
-      formData.append('action', 'submit');
-      formData.append('artifactName', artifactName);
+      // Process images in the browser using depth estimation
+      const result = await reconstructFrom3DPhotos(photos, (progress, status) => {
+        setUploadProgress(progress);
+        setProcessingStatus(status);
+      });
+
+      // Export to GLB
+      const blob = await result.exportGLB();
+      setModelBlob(blob);
       
-      photos.forEach((photo, index) => {
-        formData.append(`image_${index}`, photo);
-      });
-
-      setUploadProgress(30);
-      setProcessingStatus('submitting');
-      toast.info('Submitting to Rodin AI...');
-
-      // Submit to Rodin via edge function
-      const { data, error } = await supabase.functions.invoke('rodin-reconstruct', {
-        body: formData,
-      });
-
-      if (error) throw error;
-
-      setTaskId(data.taskId);
-      setUploadProgress(50);
-      setProcessingStatus('processing');
-      toast.success('Reconstruction started! This may take 5-10 minutes...');
+      // Create a URL for the model
+      const modelUrl = URL.createObjectURL(blob);
+      onModelGenerated?.(modelUrl);
+      
+      setIsProcessing(false);
+      toast.success('3D model generated successfully in your browser!');
       
     } catch (error) {
       console.error('Reconstruction error:', error);
-      toast.error('Failed to start reconstruction. Please check your API key.');
+      toast.error('Failed to reconstruct 3D model. Please try different photos.');
       setIsProcessing(false);
     }
   };
 
   const resetWorkflow = () => {
-    setTaskId(null);
     setPhotos([]);
     setArtifactName('');
-    setModelUrl(null);
-    setViewerUrl(null);
+    setModelBlob(null);
     setProcessingStatus('');
     setUploadProgress(0);
+  };
+
+  const handleDownload = () => {
+    if (!modelBlob) return;
+    
+    const url = URL.createObjectURL(modelBlob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${artifactName.replace(/\s+/g, '_')}_3d_model.glb`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success('Model downloaded successfully!');
   };
 
   return (
@@ -146,14 +102,14 @@ export const ReconstructionWorkflow = ({ onModelGenerated }: ReconstructionWorkf
       <div>
         <h3 className="text-xl font-semibold text-foreground mb-2 flex items-center gap-2">
           <Sparkles className="h-5 w-5 text-primary" />
-          AI-Powered 3D Reconstruction
+          In-Browser 3D Reconstruction
         </h3>
         <p className="text-sm text-muted-foreground">
-          Upload 10+ photos from different angles. Rodin AI will automatically generate a high-quality 3D model in minutes!
+          Upload 3+ photos from different angles. AI-powered depth estimation will generate a 3D model right in your browser - completely free, no cloud processing!
         </p>
       </div>
 
-      {!modelUrl ? (
+      {!modelBlob ? (
         <div className="space-y-4">
           <div>
             <Label htmlFor="artifact-name">Artifact Name</Label>
@@ -168,7 +124,7 @@ export const ReconstructionWorkflow = ({ onModelGenerated }: ReconstructionWorkf
 
           <div>
             <Label htmlFor="photos">
-              Photos (10-50 images recommended)
+              Photos (3-20 images)
             </Label>
             <div className="mt-2 flex items-center gap-4">
               <Button
@@ -189,9 +145,9 @@ export const ReconstructionWorkflow = ({ onModelGenerated }: ReconstructionWorkf
                 className="hidden"
               />
             </div>
-            {photos.length > 0 && photos.length < 10 && (
+            {photos.length > 0 && photos.length < 3 && (
               <p className="text-sm text-destructive mt-1">
-                At least 10 photos required for quality reconstruction
+                At least 3 photos required for reconstruction
               </p>
             )}
           </div>
@@ -200,11 +156,11 @@ export const ReconstructionWorkflow = ({ onModelGenerated }: ReconstructionWorkf
             <AlertDescription className="text-sm">
               <strong>Photo Tips:</strong>
               <ul className="list-disc ml-4 mt-2 space-y-1">
-                <li>Take 20-50 photos from all angles (360° coverage)</li>
-                <li>Overlap each photo by 60-80%</li>
+                <li>Take 5-15 photos from different angles (360° coverage works best)</li>
                 <li>Use consistent, even lighting</li>
                 <li>Keep artifact in sharp focus</li>
-                <li>Avoid reflective surfaces and shadows</li>
+                <li>Avoid extreme shadows and reflections</li>
+                <li>More photos = better reconstruction quality</li>
               </ul>
             </AlertDescription>
           </Alert>
@@ -217,28 +173,26 @@ export const ReconstructionWorkflow = ({ onModelGenerated }: ReconstructionWorkf
               </div>
               <Progress value={uploadProgress} />
               <p className="text-sm text-muted-foreground text-center">
-                {processingStatus === 'processing' 
-                  ? 'Rodin AI is reconstructing your 3D model... This may take 5-10 minutes.' 
-                  : 'Uploading photos to Rodin...'}
+                {processingStatus || 'Processing in your browser...'}
               </p>
             </div>
           )}
 
           <Button
             onClick={handleReconstruct}
-            disabled={isProcessing || photos.length < 10 || !artifactName.trim()}
+            disabled={isProcessing || photos.length < 3 || !artifactName.trim()}
             className="w-full"
             size="lg"
           >
             {isProcessing ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Processing with Rodin AI...
+                Processing in Browser...
               </>
             ) : (
               <>
                 <Sparkles className="mr-2 h-4 w-4" />
-                Generate 3D Model with AI
+                Generate 3D Model (Free & In-Browser)
               </>
             )}
           </Button>
@@ -246,7 +200,7 @@ export const ReconstructionWorkflow = ({ onModelGenerated }: ReconstructionWorkf
           <Alert>
             <AlertCircle className="h-4 w-4" />
             <AlertDescription className="text-xs">
-              <strong>Powered by Hyper3D Rodin:</strong> State-of-the-art AI photogrammetry that automatically reconstructs high-quality 3D models from photos. Processing typically takes 5-10 minutes.
+              <strong>Powered by AI Depth Estimation:</strong> Uses advanced computer vision to estimate depth from photos and generate 3D meshes. All processing happens in your browser using your device's GPU - completely free, private, and offline-capable!
             </AlertDescription>
           </Alert>
         </div>
@@ -256,7 +210,7 @@ export const ReconstructionWorkflow = ({ onModelGenerated }: ReconstructionWorkf
             <CheckCircle2 className="h-4 w-4 text-primary" />
             <AlertDescription>
               <strong>3D Model Generated Successfully!</strong>
-              <p className="mt-2 text-sm">Your artifact has been reconstructed by Rodin AI.</p>
+              <p className="mt-2 text-sm">Your artifact has been reconstructed in your browser.</p>
             </AlertDescription>
           </Alert>
 
@@ -265,39 +219,28 @@ export const ReconstructionWorkflow = ({ onModelGenerated }: ReconstructionWorkf
               <div>
                 <h4 className="font-semibold mb-1">Artifact: {artifactName}</h4>
                 <p className="text-sm text-muted-foreground">
-                  Generated from {photos.length} photos
+                  Generated from {photos.length} photos using AI depth estimation
                 </p>
               </div>
 
-              {viewerUrl && (
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => window.open(viewerUrl, '_blank')}
-                >
-                  <ExternalLink className="mr-2 h-4 w-4" />
-                  View in Rodin 3D Viewer
-                </Button>
-              )}
-
-              {modelUrl && (
-                <Button
-                  className="w-full"
-                  onClick={() => window.open(modelUrl, '_blank')}
-                >
-                  Download .glb Model
-                </Button>
-              )}
+              <Button
+                className="w-full"
+                onClick={handleDownload}
+              >
+                <Download className="mr-2 h-4 w-4" />
+                Download .glb Model
+              </Button>
             </div>
 
             <Alert>
               <AlertDescription className="text-sm">
-                <strong>Next Steps:</strong>
-                <ol className="list-decimal ml-4 mt-2 space-y-1">
-                  <li>Download the .glb model file</li>
-                  <li>Upload it using "Upload .glb Model" button above</li>
-                  <li>Explore your 3D artifact with measurements and AI analysis</li>
-                </ol>
+                <strong>What just happened?</strong>
+                <ul className="list-disc ml-4 mt-2 space-y-1">
+                  <li>AI analyzed your photos and estimated depth maps</li>
+                  <li>Generated a 3D mesh with texture mapping</li>
+                  <li>All processing done locally in your browser (100% private)</li>
+                  <li>Download the model and upload it above to view with full features!</li>
+                </ul>
               </AlertDescription>
             </Alert>
           </div>
