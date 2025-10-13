@@ -2,9 +2,10 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Camera, RotateCcw, Download, Scan, AlertTriangle, CheckCircle, Eye } from "lucide-react";
+import { Camera, RotateCcw, Download, Scan, AlertTriangle, CheckCircle, Eye, Share2 } from "lucide-react";
 import { toast } from "sonner";
 import { analyzeImageQuality, removeBackground, loadImage, preprocessImage, getOptimalCameraConstraints, type ImageQualityMetrics } from "@/lib/imageProcessing";
+import { supabase } from "@/integrations/supabase/client";
 
 interface Scanner3DProps {
   onScanComplete: (scanData: any) => void;
@@ -250,6 +251,39 @@ export const Scanner3D = ({ onScanComplete }: Scanner3DProps) => {
     stopCamera();
   }, [stopCamera]);
 
+  const handlePostToFeed = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        toast.error("Please sign in to post to the public feed");
+        return;
+      }
+
+      const scanMetadata = {
+        imageCount: capturedImages.length,
+        averageQuality: imageQualities.reduce((sum, q) => sum + q.score, 0) / imageQualities.length,
+        timestamp: new Date().toISOString()
+      };
+
+      const { error } = await supabase.from('discoveries').insert({
+        user_id: user.id,
+        title: `3D Scan - ${new Date().toLocaleDateString()}`,
+        description: `High-quality 3D scan with ${capturedImages.length} images`,
+        type: '3d_scan',
+        thumbnail_url: capturedImages[0],
+        metadata: scanMetadata
+      });
+
+      if (error) throw error;
+      
+      toast.success("Posted to public feed!");
+    } catch (error) {
+      console.error("Error posting to feed:", error);
+      toast.error("Failed to post to public feed");
+    }
+  };
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -452,10 +486,16 @@ export const Scanner3D = ({ onScanComplete }: Scanner3DProps) => {
             <Download className="h-10 w-10 text-accent" />
           </div>
           <p className="text-accent font-medium">3D scan completed!</p>
-          <Button onClick={reset} variant="outline">
-            <RotateCcw className="mr-2 h-4 w-4" />
-            Scan Another Artifact
-          </Button>
+          <div className="flex gap-2 justify-center">
+            <Button onClick={handlePostToFeed} className="bg-gradient-to-r from-primary to-accent">
+              <Share2 className="mr-2 h-4 w-4" />
+              Post to Public Feed
+            </Button>
+            <Button onClick={reset} variant="outline">
+              <RotateCcw className="mr-2 h-4 w-4" />
+              Scan Another Artifact
+            </Button>
+          </div>
         </div>
       )}
 

@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Sparkles, FileImage, Loader2, CheckCircle2, AlertCircle, ExternalLink } from 'lucide-react';
+import { Sparkles, FileImage, Loader2, CheckCircle2, AlertCircle, ExternalLink, Share2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -135,6 +135,40 @@ export const ReconstructionWorkflow = ({ onModelGenerated }: ReconstructionWorkf
     setViewerUrl(null);
     setProcessingStatus('');
     setUploadProgress(0);
+  };
+
+  const handlePostToFeed = async () => {
+    if (!modelUrl || !artifactName) return;
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        toast.error("Please sign in to post to the public feed");
+        return;
+      }
+
+      const { error } = await supabase.from('discoveries').insert({
+        user_id: user.id,
+        title: artifactName,
+        description: `Professional 3D reconstruction from ${photos.length} photos using Rodin AI`,
+        type: '3d_scan',
+        media_url: modelUrl,
+        thumbnail_url: viewerUrl,
+        metadata: {
+          photoCount: photos.length,
+          reconstructionMethod: 'Rodin AI',
+          viewerUrl: viewerUrl
+        }
+      });
+
+      if (error) throw error;
+      
+      toast.success("Posted to public feed!");
+    } catch (error) {
+      console.error("Error posting to feed:", error);
+      toast.error("Failed to post to public feed");
+    }
   };
 
   return (
@@ -297,13 +331,22 @@ export const ReconstructionWorkflow = ({ onModelGenerated }: ReconstructionWorkf
             </Alert>
           </div>
 
-          <Button
-            variant="outline"
-            onClick={resetWorkflow}
-            className="w-full"
-          >
-            Start New Reconstruction
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              onClick={handlePostToFeed}
+              className="flex-1 bg-gradient-to-r from-primary to-accent"
+            >
+              <Share2 className="mr-2 h-4 w-4" />
+              Post to Public Feed
+            </Button>
+            <Button
+              variant="outline"
+              onClick={resetWorkflow}
+              className="flex-1"
+            >
+              Start New Reconstruction
+            </Button>
+          </div>
         </div>
       )}
     </Card>

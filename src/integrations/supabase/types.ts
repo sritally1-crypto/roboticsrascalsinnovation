@@ -14,6 +14,80 @@ export type Database = {
   }
   public: {
     Tables: {
+      discoveries: {
+        Row: {
+          comments_count: number
+          created_at: string
+          description: string | null
+          id: string
+          likes_count: number
+          media_url: string | null
+          metadata: Json | null
+          thumbnail_url: string | null
+          title: string
+          type: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          comments_count?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          likes_count?: number
+          media_url?: string | null
+          metadata?: Json | null
+          thumbnail_url?: string | null
+          title: string
+          type: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          comments_count?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          likes_count?: number
+          media_url?: string | null
+          metadata?: Json | null
+          thumbnail_url?: string | null
+          title?: string
+          type?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      discovery_likes: {
+        Row: {
+          created_at: string
+          discovery_id: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          discovery_id: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          discovery_id?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "discovery_likes_discovery_id_fkey"
+            columns: ["discovery_id"]
+            isOneToOne: false
+            referencedRelation: "discoveries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       reconstruction_jobs: {
         Row: {
           artifact_name: string

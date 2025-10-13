@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
-import { Brain, Database, Calendar, MapPin, Microscope, Zap, Upload, FileImage } from "lucide-react";
+import { Brain, Database, Calendar, MapPin, Microscope, Zap, Upload, FileImage, Share2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -140,6 +140,35 @@ export const AIAnalysis = ({ scanData, artifactImage }: AIAnalysisProps) => {
     if (confidence >= 80) return "text-accent";
     if (confidence >= 60) return "text-discovery-gold";
     return "text-destructive";
+  };
+
+  const handlePostToFeed = async () => {
+    if (!results || !uploadedImage) return;
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        toast.error("Please sign in to post to the public feed");
+        return;
+      }
+
+      const { error } = await supabase.from('discoveries').insert([{
+        user_id: user.id,
+        title: `${results.material} - ${results.period}`,
+        description: results.detailedAnalysis || `${results.function} from ${results.location}`,
+        type: 'ai_analysis',
+        thumbnail_url: uploadedImage,
+        metadata: results as any
+      }]);
+
+      if (error) throw error;
+      
+      toast.success("Posted to public feed!");
+    } catch (error) {
+      console.error("Error posting to feed:", error);
+      toast.error("Failed to post to public feed");
+    }
   };
 
   return (
@@ -303,9 +332,15 @@ export const AIAnalysis = ({ scanData, artifactImage }: AIAnalysisProps) => {
             </div>
           </div>
 
-          <Button variant="outline" className="w-full">
-            Export Analysis Report
-          </Button>
+          <div className="flex gap-2">
+            <Button onClick={handlePostToFeed} className="flex-1 bg-gradient-to-r from-primary to-accent">
+              <Share2 className="mr-2 h-4 w-4" />
+              Post to Public Feed
+            </Button>
+            <Button variant="outline" className="flex-1">
+              Export Analysis Report
+            </Button>
+          </div>
         </div>
       )}
     </Card>
