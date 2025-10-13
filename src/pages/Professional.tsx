@@ -1,4 +1,6 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
 import { Scanner3D } from "@/components/Scanner3D";
 import { PhotoUploader } from "@/components/PhotoUploader";
 import { ModelUploader } from "@/components/ModelUploader";
@@ -8,16 +10,55 @@ import { ReconstructionWorkflow } from "@/components/ReconstructionWorkflow";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Upload, FileText, Users, Settings, Camera, FileBox, Cpu } from "lucide-react";
+import { Upload, FileText, Users, Settings, Camera, FileBox, Cpu, LogOut } from "lucide-react";
 import { analyzeImageQuality, removeBackground, loadImage, preprocessImage } from "@/lib/imageProcessing";
 import { type ImageQualityMetrics } from "@/lib/imageProcessing";
 import { toast } from "sonner";
 
 const Professional = () => {
+  const navigate = useNavigate();
   const [scanData, setScanData] = useState(null);
   const [activeTab, setActiveTab] = useState("scan");
   const [scanMode, setScanMode] = useState<'live' | 'upload' | 'model' | 'reconstruction'>('model');
   const [modelFile, setModelFile] = useState<{ file: File; url: string } | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Check authentication
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) {
+        navigate("/auth");
+      } else {
+        setIsLoading(false);
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!session) {
+        navigate("/auth");
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [navigate]);
+
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+      toast.success("Logged out successfully");
+      navigate("/");
+    } catch (error) {
+      toast.error("Error logging out");
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-background via-stone-light to-background flex items-center justify-center">
+        <p className="text-muted-foreground">Loading...</p>
+      </div>
+    );
+  }
 
   const handleScanComplete = (data: any) => {
     setScanData(data);
@@ -143,9 +184,19 @@ const Professional = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-stone-light to-background">
       <div className="container mx-auto p-6">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-foreground mb-2">Professional Workspace</h1>
-          <p className="text-muted-foreground">Advanced tools for archaeological research and collaboration</p>
+        <div className="mb-8 flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground mb-2">Professional Workspace</h1>
+            <p className="text-muted-foreground">Advanced tools for archaeological research and collaboration</p>
+          </div>
+          <Button 
+            onClick={handleLogout}
+            variant="outline"
+            className="flex items-center gap-2"
+          >
+            <LogOut className="h-4 w-4" />
+            Logout
+          </Button>
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
