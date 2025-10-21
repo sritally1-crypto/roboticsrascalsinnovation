@@ -1,15 +1,12 @@
 import { useState } from "react";
 import { ModeSelector } from "@/components/ModeSelector";
-import { useNavigate } from "react-router-dom";
 import Professional from "./Professional";
 import Public from "./Public";
 import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Sparkles, Globe, Users, LogIn } from "lucide-react";
+import { Sparkles, Globe, Users } from "lucide-react";
 
 const Index = () => {
   const [selectedMode, setSelectedMode] = useState<'professional' | 'public' | null>(null);
-  const navigate = useNavigate();
 
   if (selectedMode === 'professional') {
     return <Professional />;
@@ -36,14 +33,6 @@ const Index = () => {
             Connect ancient discoveries with modern technology. Scan artifacts with AI, explore 3D models, 
             and join a global community of archaeologists and history enthusiasts.
           </p>
-          <Button 
-            onClick={() => navigate("/auth")}
-            size="lg"
-            className="bg-gradient-to-r from-primary to-accent"
-          >
-            <LogIn className="mr-2 h-5 w-5" />
-            Sign In to Start Scanning
-          </Button>
         </div>
 
         {/* Mode Selection */}
