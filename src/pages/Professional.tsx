@@ -1,23 +1,46 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Scanner3D } from "@/components/Scanner3D";
 import { PhotoUploader } from "@/components/PhotoUploader";
 import { ModelUploader } from "@/components/ModelUploader";
 import { Viewer3D } from "@/components/Viewer3D";
 import { AIAnalysis } from "@/components/AIAnalysis";
 import { ReconstructionWorkflow } from "@/components/ReconstructionWorkflow";
+import { ArchiveTab } from "@/components/ArchiveTab";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Upload, FileText, Users, Settings, Camera, FileBox, Cpu } from "lucide-react";
+import { Upload, FileText, Users, Settings, Camera, FileBox, Cpu, LogOut, Archive } from "lucide-react";
 import { analyzeImageQuality, removeBackground, loadImage, preprocessImage } from "@/lib/imageProcessing";
 import { type ImageQualityMetrics } from "@/lib/imageProcessing";
+import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 
 const Professional = () => {
+  const navigate = useNavigate();
+  const { user, loading, signOut } = useAuth();
   const [scanData, setScanData] = useState(null);
   const [activeTab, setActiveTab] = useState("scan");
   const [scanMode, setScanMode] = useState<'live' | 'upload' | 'model' | 'reconstruction'>('model');
   const [modelFile, setModelFile] = useState<{ file: File; url: string } | null>(null);
+
+  useEffect(() => {
+    if (!loading && !user) {
+      navigate('/auth');
+    }
+  }, [user, loading, navigate]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-background via-stone-light to-background flex items-center justify-center">
+        <p className="text-muted-foreground">Loading...</p>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return null;
+  }
 
   const handleScanComplete = (data: any) => {
     setScanData(data);
@@ -143,13 +166,19 @@ const Professional = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-stone-light to-background">
       <div className="container mx-auto p-6">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-foreground mb-2">Professional Workspace</h1>
-          <p className="text-muted-foreground">Advanced tools for archaeological research and collaboration</p>
+        <div className="mb-8 flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground mb-2">Professional Workspace</h1>
+            <p className="text-muted-foreground">Advanced tools for archaeological research and collaboration</p>
+          </div>
+          <Button variant="outline" onClick={signOut}>
+            <LogOut className="h-4 w-4 mr-2" />
+            Sign Out
+          </Button>
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="scan" className="flex items-center gap-2">
               <Camera className="h-4 w-4" />
               3D Scanner
@@ -161,6 +190,10 @@ const Professional = () => {
             <TabsTrigger value="analysis" className="flex items-center gap-2">
               <FileText className="h-4 w-4" />
               AI Analysis
+            </TabsTrigger>
+            <TabsTrigger value="archive" className="flex items-center gap-2">
+              <Archive className="h-4 w-4" />
+              Archive
             </TabsTrigger>
             <TabsTrigger value="collaborate" className="flex items-center gap-2">
               <Users className="h-4 w-4" />
@@ -240,6 +273,10 @@ const Professional = () => {
 
           <TabsContent value="analysis" className="space-y-6">
             <AIAnalysis scanData={scanData} />
+          </TabsContent>
+
+          <TabsContent value="archive" className="space-y-6">
+            <ArchiveTab />
           </TabsContent>
 
           <TabsContent value="collaborate" className="space-y-6">

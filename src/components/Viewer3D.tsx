@@ -3,11 +3,13 @@ import { Canvas, useFrame, useLoader } from '@react-three/fiber';
 import { OrbitControls, Environment, ContactShadows, Text, useGLTF } from '@react-three/drei';
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { RotateCcw, Maximize, Download, Ruler } from "lucide-react";
+import { RotateCcw, Maximize, Download, Ruler, Archive, Share2 } from "lucide-react";
 import { MeasurementOverlay } from './MeasurementOverlay';
 import { toast } from "sonner";
 import * as THREE from 'three';
 import { reconstruct3DFromImages, type ReconstructionData } from '@/lib/3dReconstruction';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Viewer3DProps {
   scanData?: any;
@@ -138,12 +140,68 @@ function ArtifactScene({ scanData }: { scanData?: any }) {
 }
 
 export const Viewer3D = ({ scanData, artifactName = "Ancient Artifact" }: Viewer3DProps) => {
+  const { user } = useAuth();
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showMeasurements, setShowMeasurements] = useState(false);
 
   const handleReset = () => {
     // Reset camera position - would need to access OrbitControls ref
     console.log('Reset camera position');
+  };
+
+  const handleSaveToArchive = async () => {
+    if (!user) {
+      toast.error("Please sign in to save artifacts");
+      return;
+    }
+
+    if (!scanData) {
+      toast.error("No artifact data to save");
+      return;
+    }
+
+    const { error } = await supabase.from('archived_artifacts').insert({
+      user_id: user.id,
+      title: artifactName,
+      description: `Scanned on ${new Date(scanData.timestamp).toLocaleDateString()}`,
+      artifact_type: scanData.modelUrl ? '3d_model' : 'scan',
+      model_url: scanData.modelUrl || null,
+      metadata: scanData
+    });
+
+    if (error) {
+      toast.error("Failed to save artifact");
+    } else {
+      toast.success("Artifact saved to archive!");
+    }
+  };
+
+  const handlePostToFeed = async () => {
+    if (!user) {
+      toast.error("Please sign in to post");
+      return;
+    }
+
+    if (!scanData) {
+      toast.error("No artifact data to post");
+      return;
+    }
+
+    const { error } = await supabase.from('discoveries').insert({
+      user_id: user.id,
+      title: artifactName,
+      description: `3D scan captured on ${new Date(scanData.timestamp).toLocaleDateString()}`,
+      type: '3d_scan',
+      media_url: scanData.modelUrl || scanData.images?.[0] || null,
+      thumbnail_url: scanData.images?.[0] || null,
+      metadata: scanData
+    });
+
+    if (error) {
+      toast.error("Failed to post to feed");
+    } else {
+      toast.success("Posted to public feed!");
+    }
   };
 
   const handleExport = () => {
@@ -189,6 +247,17 @@ export const Viewer3D = ({ scanData, artifactName = "Ancient Artifact" }: Viewer
             <Button variant="outline" size="sm" onClick={handleExport}>
               <Download className="h-4 w-4" />
             </Button>
+            {user && scanData && (
+              <>
+                <Button variant="outline" size="sm" onClick={handleSaveToArchive}>
+                  <Archive className="h-4 w-4" />
+                </Button>
+                <Button size="sm" onClick={handlePostToFeed}>
+                  <Share2 className="h-4 w-4 mr-1" />
+                  Post
+                </Button>
+              </>
+            )}
           </div>
         </div>
       </div>

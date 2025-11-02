@@ -1,11 +1,16 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { ModeSelector } from "@/components/ModeSelector";
 import Professional from "./Professional";
-import Public from "./Public";
+import PublicFeed from "./PublicFeed";
 import { Card } from "@/components/ui/card";
-import { Sparkles, Globe, Users } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Sparkles, Globe, Users, Heart, LogIn } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 
 const Index = () => {
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const [selectedMode, setSelectedMode] = useState<'professional' | 'public' | null>(null);
 
   if (selectedMode === 'professional') {
@@ -13,7 +18,7 @@ const Index = () => {
   }
 
   if (selectedMode === 'public') {
-    return <Public />;
+    return <PublicFeed />;
   }
 
   return (
@@ -33,6 +38,26 @@ const Index = () => {
             Connect ancient discoveries with modern technology. Scan artifacts with AI, explore 3D models, 
             and join a global community of archaeologists and history enthusiasts.
           </p>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-8">
+          {!user && (
+            <Button size="lg" onClick={() => navigate('/auth')} className="min-w-[200px]">
+              <LogIn className="h-5 w-5 mr-2" />
+              Sign In to Professional Mode
+            </Button>
+          )}
+          {user && (
+            <Button size="lg" onClick={() => navigate('/professional')} className="min-w-[200px]">
+              <Sparkles className="h-5 w-5 mr-2" />
+              Enter Professional Mode
+            </Button>
+          )}
+          <Button size="lg" variant="outline" onClick={() => navigate('/donate')} className="min-w-[200px]">
+            <Heart className="h-5 w-5 mr-2" />
+            Support Archaeology
+          </Button>
         </div>
 
         {/* Mode Selection */}
