@@ -1,7 +1,7 @@
 import { useRef } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Upload, FileBox } from 'lucide-react';
+import { Upload, Camera } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface ModelUploaderProps {
@@ -15,14 +15,14 @@ export const ModelUploader = ({ onModelUploaded }: ModelUploaderProps) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!file.name.endsWith('.glb') && !file.name.endsWith('.gltf')) {
-      toast.error('Please upload a .glb or .gltf file');
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please upload an image file (JPG, PNG, etc.)');
       return;
     }
 
     const url = URL.createObjectURL(file);
     onModelUploaded(file, url);
-    toast.success('3D model loaded successfully!');
+    toast.success('Photo uploaded successfully!');
     
     if (e.target) e.target.value = '';
   };
@@ -34,14 +34,14 @@ export const ModelUploader = ({ onModelUploaded }: ModelUploaderProps) => {
     const file = e.dataTransfer.files[0];
     if (!file) return;
 
-    if (!file.name.endsWith('.glb') && !file.name.endsWith('.gltf')) {
-      toast.error('Please upload a .glb or .gltf file');
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please upload an image file (JPG, PNG, etc.)');
       return;
     }
 
     const url = URL.createObjectURL(file);
     onModelUploaded(file, url);
-    toast.success('3D model loaded successfully!');
+    toast.success('Photo uploaded successfully!');
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -57,19 +57,19 @@ export const ModelUploader = ({ onModelUploaded }: ModelUploaderProps) => {
         onDragOver={handleDragOver}
         onClick={() => fileInputRef.current?.click()}
       >
-        <FileBox className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
-        <h3 className="text-lg font-semibold mb-2">Upload 3D Model</h3>
+        <Camera className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
+        <h3 className="text-lg font-semibold mb-2">Upload Photo</h3>
         <p className="text-sm text-muted-foreground mb-4">
-          Drag and drop your .glb file here, or click to browse
+          Drag and drop your photo here, or click to browse
         </p>
         <Button className="gap-2">
           <Upload className="h-4 w-4" />
-          Select .glb File
+          Select Photo
         </Button>
         <input
           ref={fileInputRef}
           type="file"
-          accept=".glb,.gltf"
+          accept="image/*"
           className="hidden"
           onChange={handleFileSelect}
         />
@@ -78,7 +78,7 @@ export const ModelUploader = ({ onModelUploaded }: ModelUploaderProps) => {
       <div className="mt-6 space-y-4">
         <div className="p-4 bg-accent/10 rounded-lg border border-accent/20">
           <h4 className="font-semibold mb-3 flex items-center gap-2">
-            <FileBox className="h-5 w-5 text-primary" />
+            <Camera className="h-5 w-5 text-primary" />
             How to Create 3D Models (Free Tools)
           </h4>
           
