@@ -4,9 +4,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
-import { Brain, Database, Calendar, MapPin, Microscope, Zap, Upload, FileImage } from "lucide-react";
+import { Brain, Database, Calendar, MapPin, Microscope, Zap, Upload, FileImage, Share2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface AIAnalysisProps {
   scanData?: any;
@@ -51,11 +52,13 @@ interface AnalysisResult {
 }
 
 export const AIAnalysis = ({ scanData, artifactImage }: AIAnalysisProps) => {
+  const { user } = useAuth();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [results, setResults] = useState<AnalysisResult | null>(null);
   const [currentStep, setCurrentStep] = useState<string>("");
   const [uploadedImage, setUploadedImage] = useState<string | null>(artifactImage || null);
+  const [isPosting, setIsPosting] = useState(false);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -135,6 +138,52 @@ export const AIAnalysis = ({ scanData, artifactImage }: AIAnalysisProps) => {
       setUploadedImage(artifactImage);
     }
   }, [artifactImage]);
+
+  const handlePostToFeed = async () => {
+    if (!user) {
+      toast.error("Please sign in to Professional Mode to share your work");
+      return;
+    }
+
+    if (!results || !uploadedImage) {
+      toast.error("No analysis results to post");
+      return;
+    }
+
+    setIsPosting(true);
+
+    try {
+      const { error } = await supabase.from('discoveries').insert({
+        user_id: user.id,
+        title: `${results.material} - ${results.period}`,
+        description: results.detailedAnalysis || `${results.function} from ${results.location}. Cultural origin: ${results.culture}`,
+        type: 'ai_analysis',
+        media_url: uploadedImage,
+        thumbnail_url: uploadedImage,
+        metadata: {
+          material: results.material,
+          confidence: results.confidence,
+          period: results.period,
+          culture: results.culture,
+          function: results.function,
+          location: results.location,
+          dimensions: results.dimensions,
+          condition: results.condition,
+          verification: results.verification,
+          matches: results.matches
+        }
+      });
+
+      if (error) throw error;
+
+      toast.success("Posted to public feed! View it in the Public Feed page");
+    } catch (error) {
+      console.error("Failed to post to feed:", error);
+      toast.error("Failed to post to feed. Please try again.");
+    } finally {
+      setIsPosting(false);
+    }
+  };
 
   const getConfidenceColor = (confidence: number) => {
     if (confidence >= 80) return "text-accent";
@@ -303,9 +352,26 @@ export const AIAnalysis = ({ scanData, artifactImage }: AIAnalysisProps) => {
             </div>
           </div>
 
-          <Button variant="outline" className="w-full">
-            Export Analysis Report
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" className="flex-1">
+              Export Analysis Report
+            </Button>
+            {user && (
+              <Button 
+                onClick={handlePostToFeed} 
+                disabled={isPosting}
+                className="flex-1 bg-gradient-to-r from-professional-blue to-accent"
+              >
+                <Share2 className="mr-2 h-4 w-4" />
+                {isPosting ? "Posting..." : "Post to Feed"}
+              </Button>
+            )}
+          </div>
+          {!user && (
+            <p className="text-sm text-center text-muted-foreground">
+              Sign in to Professional Mode to share your analysis
+            </p>
+          )}
         </div>
       )}
     </Card>

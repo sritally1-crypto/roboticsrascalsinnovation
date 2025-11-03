@@ -2,15 +2,18 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Camera, RotateCcw, Download, Scan, AlertTriangle, CheckCircle, Eye } from "lucide-react";
+import { Camera, RotateCcw, Download, Scan, AlertTriangle, CheckCircle, Eye, Share2 } from "lucide-react";
 import { toast } from "sonner";
 import { analyzeImageQuality, removeBackground, loadImage, preprocessImage, getOptimalCameraConstraints, type ImageQualityMetrics } from "@/lib/imageProcessing";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 
 interface Scanner3DProps {
   onScanComplete: (scanData: any) => void;
 }
 
 export const Scanner3D = ({ onScanComplete }: Scanner3DProps) => {
+  const { user } = useAuth();
   const [isScanning, setIsScanning] = useState(false);
   const [capturedImages, setCapturedImages] = useState<string[]>([]);
   const [processedImages, setProcessedImages] = useState<string[]>([]);
@@ -28,6 +31,7 @@ export const Scanner3D = ({ onScanComplete }: Scanner3DProps) => {
     errorMargin: "±0.02mm",
     pointDensity: "2.5M points/cm²"
   });
+  const [isPosting, setIsPosting] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -239,6 +243,52 @@ export const Scanner3D = ({ onScanComplete }: Scanner3DProps) => {
     onScanComplete(scanData);
     toast.success(`3D scan completed! Quality: ${qualityGrade.toUpperCase()}`);
   }, [capturedImages, processedImages, imageQualities, onScanComplete]);
+
+  const handlePostToFeed = async () => {
+    if (!user) {
+      toast.error("Please sign in to Professional Mode to share your work");
+      return;
+    }
+
+    if (capturedImages.length === 0) {
+      toast.error("No scan data to post");
+      return;
+    }
+
+    setIsPosting(true);
+
+    try {
+      const avgQuality = imageQualities.reduce((sum, q) => sum + q.score, 0) / imageQualities.length;
+      const qualityGrade = avgQuality > 0.8 ? 'excellent' : avgQuality > 0.7 ? 'high' : avgQuality > 0.6 ? 'medium' : 'low';
+
+      const { error } = await supabase.from('discoveries').insert({
+        user_id: user.id,
+        title: "3D Scanned Artifact",
+        description: `High-quality 3D scan with ${capturedImages.length} images captured at ${qualityGrade} quality (${Math.round(avgQuality * 100)}% average). Processed with AI enhancement and background removal.`,
+        type: '3d_scan',
+        media_url: capturedImages[0],
+        thumbnail_url: capturedImages[0],
+        metadata: {
+          imageCount: capturedImages.length,
+          quality: qualityGrade,
+          averageQuality: avgQuality,
+          scanPrecision,
+          timestamp: new Date().toISOString(),
+          aiEnhanced: true,
+          backgroundRemoved: processedImages.length > 0
+        }
+      });
+
+      if (error) throw error;
+
+      toast.success("Posted to public feed! View it in the Public Feed page");
+    } catch (error) {
+      console.error("Failed to post to feed:", error);
+      toast.error("Failed to post to feed. Please try again.");
+    } finally {
+      setIsPosting(false);
+    }
+  };
 
   const reset = useCallback(() => {
     setCapturedImages([]);
@@ -452,10 +502,27 @@ export const Scanner3D = ({ onScanComplete }: Scanner3DProps) => {
             <Download className="h-10 w-10 text-accent" />
           </div>
           <p className="text-accent font-medium">3D scan completed!</p>
-          <Button onClick={reset} variant="outline">
-            <RotateCcw className="mr-2 h-4 w-4" />
-            Scan Another Artifact
-          </Button>
+          <div className="flex flex-col gap-2">
+            {user && (
+              <Button 
+                onClick={handlePostToFeed} 
+                disabled={isPosting}
+                className="bg-gradient-to-r from-professional-blue to-accent"
+              >
+                <Share2 className="mr-2 h-4 w-4" />
+                {isPosting ? "Posting..." : "Post to Feed"}
+              </Button>
+            )}
+            <Button onClick={reset} variant="outline">
+              <RotateCcw className="mr-2 h-4 w-4" />
+              Scan Another Artifact
+            </Button>
+            {!user && (
+              <p className="text-sm text-muted-foreground">
+                Sign in to Professional Mode to share your scan
+              </p>
+            )}
+          </div>
         </div>
       )}
 
