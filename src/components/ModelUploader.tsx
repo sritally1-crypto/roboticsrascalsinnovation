@@ -79,48 +79,28 @@ export const ModelUploader = ({ onModelUploaded }: ModelUploaderProps) => {
         <div className="p-4 bg-accent/10 rounded-lg border border-accent/20">
           <h4 className="font-semibold mb-3 flex items-center gap-2">
             <Camera className="h-5 w-5 text-primary" />
-            How to Create 3D Models (Free Tools)
+            Photography Tips
           </h4>
           
-          <div className="space-y-4">
-            <div>
-              <h5 className="font-medium text-sm mb-2">🖥️ Option 1: Meshroom (Desktop - Recommended)</h5>
-              <ul className="text-sm text-muted-foreground space-y-1 ml-4">
-                <li>• Download free from <a href="https://alicevision.org/#meshroom" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">alicevision.org</a></li>
-                <li>• Upload 8-20 photos of your artifact from different angles</li>
-                <li>• Meshroom automatically creates a .glb 3D model</li>
-                <li>• Takes 5-15 minutes depending on photo count</li>
-                <li>• <strong>Best quality</strong> for archaeological artifacts</li>
-              </ul>
-            </div>
-            
-            <div>
-              <h5 className="font-medium text-sm mb-2">📱 Option 2: Polycam (Mobile App)</h5>
-              <ul className="text-sm text-muted-foreground space-y-1 ml-4">
-                <li>• Free tier available (iOS/Android)</li>
-                <li>• Scan artifacts directly with your phone camera</li>
-                <li>• LiDAR support for iPhone Pro models</li>
-                <li>• Export as .glb file and upload here</li>
-                <li>• <strong>Quick and convenient</strong> for field work</li>
-              </ul>
-            </div>
-          </div>
+          <ul className="text-sm text-muted-foreground space-y-2">
+            <li>✓ <strong>Take multiple photos:</strong> Capture 10-20 shots from all angles around your artifact</li>
+            <li>✓ <strong>Good lighting:</strong> Use even lighting without harsh shadows (natural light works great)</li>
+            <li>✓ <strong>Include scale:</strong> Place a ruler or coin next to the artifact for size reference</li>
+            <li>✓ <strong>Keep it stable:</strong> Make sure your artifact doesn't move between shots</li>
+          </ul>
         </div>
 
         <div className="p-4 bg-primary/5 rounded-lg border border-primary/10">
-          <h5 className="font-medium text-sm mb-2">💡 Pro Tips for FLL Innovation Project</h5>
-          <ul className="text-sm text-muted-foreground space-y-1">
-            <li>• <strong>Photography:</strong> Take 10-20 overlapping photos in a circle around the artifact</li>
-            <li>• <strong>Lighting:</strong> Use diffused, consistent lighting (avoid harsh shadows)</li>
-            <li>• <strong>Scale:</strong> Include a ruler or coin for accurate measurements</li>
-            <li>• <strong>Processing:</strong> Meshroom uses your computer's GPU (free, no cloud costs)</li>
-            <li>• <strong>Innovation:</strong> Show judges real photogrammetry with open-source tools!</li>
+          <h5 className="font-medium text-sm mb-2">📱 Recommended Tools for 3D Scanning</h5>
+          <ul className="text-sm text-muted-foreground space-y-2">
+            <li>• <strong>Polycam</strong> (iOS/Android) - Scan with your phone camera, free version available</li>
+            <li>• <strong>Meshroom</strong> (Desktop) - Free software for creating 3D models from photos</li>
           </ul>
         </div>
 
         <div className="p-3 bg-muted/30 rounded border border-muted">
           <p className="text-xs text-muted-foreground text-center">
-            📚 Need help? Search YouTube for "Meshroom tutorial" or "Polycam 3D scanning guide"
+            💡 Search YouTube for "3D scanning tutorial" for step-by-step guides
           </p>
         </div>
       </div>
